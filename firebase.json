@@ -15,11 +15,20 @@
     }
   ],
   "hosting": {
-    "public": "build",
+    "public": "out",
     "ignore": [
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
     ]
+  },
+  "extensions": {
+    "send-message": "twilio/send-message@0.3.4"
   }
 }
