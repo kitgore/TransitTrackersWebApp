@@ -1,12 +1,14 @@
+// src/app/dashboard/page.tsx
+import React from 'react';
 import { AppSidebar } from "@/components/app-sidebar";
+import ShiftScheduler from '@/components/ShiftScheduler';
 
 export default function DashboardPage() {
   return (
     <AppSidebar breadcrumb="Schedule">
-      <div className="grid auto-rows-min gap-4 md:grid-cols-5">
-        {Array.from({ length: 20 }).map((_, i) => (
-          <div key={i} className="aspect-square rounded-xl bg-muted/50" />
-        ))}
+      <div className="container mx-auto p-4">
+        <h1 className="text-xl font-bold mb-4">Dashboard</h1>
+        <ShiftScheduler />
       </div>
     </AppSidebar>
   );
