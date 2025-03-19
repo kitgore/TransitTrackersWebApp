@@ -38,6 +38,9 @@ import { Nav } from "@/components/nav"
 import { type Mail } from "../src/app/data"
 import { useMail } from "../src/app/use-mail"
 
+import { AppSidebar } from "./app-sidebar"
+import { useRef, useMemo } from "react"
+
 interface MailProps {
   accounts: {
     label: string
@@ -48,144 +51,72 @@ interface MailProps {
   defaultLayout: number[] | undefined
   defaultCollapsed?: boolean
   navCollapsedSize: number
+  onLayoutChange?: (sizes: number[]) => void
+  onCollapsedChange?: (collapsed: boolean) => void
 }
+
 
 export function Mail({
   accounts,
   mails,
-  defaultLayout = [265, 440, 655],
-  defaultCollapsed = false,
+  defaultLayout,
   navCollapsedSize,
+  onLayoutChange,
 }: MailProps) {
-  const [isCollapsed, setIsCollapsed] = React.useState(defaultCollapsed)
-  const [mail] = useMail()
+  const [mail] = useMail();
+  const isFirstLayout = useRef(true);
+  
+  // Set default values that respect min/max constraints
+  const normalizedLayout = useMemo(() => {
+    const defaultSizes = [60, 40]; // Default split
+    
+    if (!Array.isArray(defaultLayout) || defaultLayout.length !== 2) {
+      return defaultSizes;
+    }
+    
+    // Ensure both values are valid numbers and within constraints
+    const validSizes = defaultLayout.map(size => {
+      if (typeof size !== 'number' || isNaN(size) || size < 30) {
+        return 30;
+      }
+      return size;
+    });
+    
+    // Ensure they add up to 100
+    const total = validSizes[0] + validSizes[1];
+    return [
+      (validSizes[0] / total) * 100,
+      (validSizes[1] / total) * 100
+    ];
+  }, [defaultLayout]);
 
   return (
-    <TooltipProvider delayDuration={0}>
-      <ResizablePanelGroup
-        direction="horizontal"
-        onLayout={(sizes: number[]) => {
-          document.cookie = `react-resizable-panels:layout=${JSON.stringify(
-            sizes
-          )}`
-        }}
-        className="h-full max-h-[800px] items-stretch"
-      >
-        <ResizablePanel
-          defaultSize={defaultLayout[0]}
-          collapsedSize={navCollapsedSize}
-          collapsible={true}
-          minSize={15}
-          maxSize={20}
-          onCollapse={(collapsed) => {
-            setIsCollapsed(collapsed)
-            document.cookie = `react-resizable-panels:collapsed=${JSON.stringify(
-              collapsed
-            )}`
+    <AppSidebar>
+      <TooltipProvider delayDuration={0}>
+        <ResizablePanelGroup
+          direction="horizontal"
+          onLayout={(sizes: number[]) => {
+            if (isFirstLayout.current) {
+              isFirstLayout.current = false;
+              return;
+            }
+            onLayoutChange?.(sizes);
           }}
-          className={cn(
-            isCollapsed &&
-              "min-w-[50px] transition-all duration-300 ease-in-out"
-          )}
+          className="h-full max-h-screen items-stretch"
         >
-          <div
-            className={cn(
-              "flex h-[52px] items-center justify-center",
-              isCollapsed ? "h-[52px]" : "px-2"
-            )}
+          <ResizablePanel
+            defaultSize={normalizedLayout[0]}
+            minSize={30}
           >
-            <AccountSwitcher isCollapsed={isCollapsed} accounts={accounts} />
-          </div>
-          <Separator />
-          <Nav
-            isCollapsed={isCollapsed}
-            links={[
-              {
-                title: "Inbox",
-                label: "128",
-                icon: Inbox,
-                variant: "default",
-              },
-              {
-                title: "Drafts",
-                label: "9",
-                icon: File,
-                variant: "ghost",
-              },
-              {
-                title: "Sent",
-                label: "",
-                icon: Send,
-                variant: "ghost",
-              },
-              {
-                title: "Junk",
-                label: "23",
-                icon: ArchiveX,
-                variant: "ghost",
-              },
-              {
-                title: "Trash",
-                label: "",
-                icon: Trash2,
-                variant: "ghost",
-              },
-              {
-                title: "Archive",
-                label: "",
-                icon: Archive,
-                variant: "ghost",
-              },
-            ]}
-          />
-          <Separator />
-          <Nav
-            isCollapsed={isCollapsed}
-            links={[
-              {
-                title: "Social",
-                label: "972",
-                icon: Users2,
-                variant: "ghost",
-              },
-              {
-                title: "Updates",
-                label: "342",
-                icon: AlertCircle,
-                variant: "ghost",
-              },
-              {
-                title: "Forums",
-                label: "128",
-                icon: MessagesSquare,
-                variant: "ghost",
-              },
-              {
-                title: "Shopping",
-                label: "8",
-                icon: ShoppingCart,
-                variant: "ghost",
-              },
-              {
-                title: "Promotions",
-                label: "21",
-                icon: Archive,
-                variant: "ghost",
-              },
-            ]}
-          />
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={defaultLayout[1]} minSize={30}>
           <Tabs defaultValue="all">
             <div className="flex items-center px-4 py-2">
-              <h1 className="text-xl font-bold">Inbox</h1>
+              <h1 className="text-xl font-bold">Driver Messaging</h1>
               <TabsList className="ml-auto">
                 <TabsTrigger
                   value="all"
                   className="text-zinc-600 dark:text-zinc-200"
                 >
-                  All mail
+                  All
                 </TabsTrigger>
                 <TabsTrigger
                   value="unread"
@@ -213,12 +144,13 @@ export function Mail({
           </Tabs>
         </ResizablePanel>
         <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={defaultLayout[2]}>
+        <ResizablePanel defaultSize={normalizedLayout[1]}>
           <MailDisplay
             mail={mails.find((item) => item.id === mail.selected) || null}
           />
         </ResizablePanel>
       </ResizablePanelGroup>
     </TooltipProvider>
+    </AppSidebar>
   )
 }
