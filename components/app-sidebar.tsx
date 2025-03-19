@@ -61,10 +61,10 @@ const navigationItems = [
   },
 ];
 
-export function AppSidebar({ children, breadcrumb = "AppSidebar" }: SidebarProps) {
+export function AppSidebar({ children }: Omit<SidebarProps, 'breadcrumb'>) {
   const [user, setUser] = useState<User | null>(null);
   const router = useRouter();
-
+  
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -102,20 +102,8 @@ export function AppSidebar({ children, breadcrumb = "AppSidebar" }: SidebarProps
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>
-
       <SidebarInset>
-        <header className="sticky top-0 flex h-16 shrink-0 items-center gap-2 border-b bg-background px-4">
-          <SidebarTrigger className="-ml-1" />
-          <Separator orientation="vertical" className="mr-2 h-4" />
-          <Breadcrumb>
-            <BreadcrumbList>
-              <BreadcrumbItem>
-                <BreadcrumbPage>{breadcrumb}</BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
-        </header>
-        <main className="flex flex-1 flex-col gap-4 p-4">
+        <main className="flex h-screen flex-col">
           {children}
         </main>
       </SidebarInset>
