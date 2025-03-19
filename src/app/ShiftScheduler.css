@@ -1,0 +1,88 @@
+.scheduler-container {
+    display: flex;
+    height: 100%; 
+    overflow: hidden; 
+  }
+  
+.bus-column {
+    /* Fixed width */
+    flex: 0 0 100px; 
+    background: #333;
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    /* adjust this value to match your header row height */
+    margin-top: 25px; 
+  }
+  
+
+
+
+
+.bus-label {
+  /* ensures equal height with shift rows */
+  height: 50px; 
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scheduler {
+  flex-grow: 1;
+  overflow-x: auto;
+  display: flex;
+  flex-direction: column;
+  /* adjusts with bus column */
+  width: calc(100% - 100px); 
+}
+
+.header {
+  display: flex;
+  background: #333;
+  color: #fff;
+  min-width: max-content;
+}
+
+.time-header {
+  /* width of each time block */
+  width: 150px; 
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.shifts-container {
+  display: flex;
+  flex-direction: column;
+  /* expands with the bus column */
+  flex-grow: 1; 
+}
+
+.shift-row {
+  display: flex;
+  min-width: max-content;
+  /* matches bus label height */
+  height: 50px; 
+}
+
+.shift-block {
+  /* matches time header width */
+  width: 150px; 
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #fff;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  /* expands dynamically */
+  flex-grow: 1; 
+}
+
+.shift-block:hover {
+  background-color: #ccc;
+}
+
+.selected {
+  background-color: #4CAF50;
+  color: #fff;
+}
