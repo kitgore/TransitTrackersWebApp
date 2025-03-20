@@ -43,6 +43,7 @@
     "next": "^15.2.3",
     "prettier": "^3.4.1",
     "react": "19.0.0-rc-66855b96-20241106",
+    "react-big-schedule": "^4.4.5",
     "react-day-picker": "^8.10.1",
     "react-dom": "19.0.0-rc-66855b96-20241106",
     "react-resizable-panels": "^2.1.7",
