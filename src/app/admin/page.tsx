@@ -14,7 +14,7 @@ import { useAuth } from "@/context/AuthContext";  // Import the Auth context
 
 interface Vehicle {
     id: string;   // Firestore document ID (auto-generated)
-    name: string; // Changed from id to name
+    name: string; // the number that shuttle services gives the vehicle
     vin: string;
     licensePlate: string;
     status: string;
@@ -116,7 +116,7 @@ export default function AdminPage() {
                 <div className="flex">
                     <div className="w-1/2 rounded-md border">
                         <div className="flex bg-gray-100 font-bold p-3 px-12 border-b">
-                            <div className="w-2/5 text-left">Action</div>
+                            <div className="w-2/5 text-left px-6">Action</div>
                             <div className="w-1/5 text-center">Vehicle</div>
                             <div className="w-2/5 text-right">Status</div>
                         </div>
@@ -125,7 +125,7 @@ export default function AdminPage() {
                             <div className="space-y-0">
                                 {vehicles.map((vehicle) => (
                                     <div key={vehicle.id} className="flex items-center p-3 border-b last:border-b-0">
-                                        <div className="w-2/5 flex items-center justify-center">
+                                        <div className="w-2/5 flex items-center justify-right px-6">
                                             <Popover>
                                                 <PopoverTrigger asChild>
                                                     <Button
@@ -170,10 +170,14 @@ export default function AdminPage() {
                                             </Popover>
                                         </div>
                                         <div className="w-1/5 text-center">{vehicle.name}</div>
-                                        <div className="w-2/5 text-right">
+                                        <div className="w-2/5 text-right px-6">
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
-                                                    <span>{vehicle.status}</span>
+                                                    <span className={` px-2 py-1 rounded-lg font-medium
+                                                        ${vehicle.status === "In Use" ? "bg-blue-200 text-blue-800" :
+                                                        vehicle.status === "Available" ? "bg-green-200 text-green-800" :
+                                                        vehicle.status === "Out of Service" ? "bg-red-200 text-red-800" : ""}
+                                                    `}>{vehicle.status}</span>
                                                 </TooltipTrigger>
                                                 <TooltipContent>{vehicle.note || "No Note"}</TooltipContent>
                                             </Tooltip>
