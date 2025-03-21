@@ -1,7 +1,6 @@
-'use client'; // Ensure this line is at the top
-
+'use client'; 
 import { useState, useEffect } from 'react';
-import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc, addDoc } from "firebase/firestore";
 import { db } from '@/src/firebase/config';
 import { AppSidebar } from "@/components/app-sidebar";
 import { ScrollArea, ScrollBar } from "@/components/bus-status-scrollable";
@@ -10,11 +9,11 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"; 
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { useAuth } from "@/context/AuthContext";  // Import the Auth context
+import { useAuth } from "@/context/AuthContext";  
 
 interface Vehicle {
-    id: string;   // Firestore document ID (auto-generated)
-    name: string; // the number that shuttle services gives the vehicle
+    id: string;
+    name: string;
     vin: string;
     licensePlate: string;
     status: string;
@@ -22,31 +21,29 @@ interface Vehicle {
 }
 
 export default function AdminPage() {
-    const { user, loading } = useAuth();  // Get the current user from AuthContext
+    const { user, loading } = useAuth();
     const [vehicles, setVehicles] = useState<Vehicle[]>([]);
     const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
     const [status, setStatus] = useState<string>("");
     const [note, setNote] = useState<string>("");
 
-    // Fetch vehicles only if the user is authenticated
+    // State for the "Add a Vehicle" form
+    const [vehicleName, setVehicleName] = useState<string>("");
+    const [vin, setVin] = useState<string>("");
+    const [licensePlate, setLicensePlate] = useState<string>("");
+
     const fetchVehicles = async () => {
         if (!user) return;
 
         const querySnapshot = await getDocs(collection(db, "vehicles"));
-        const vehicleList: Vehicle[] = querySnapshot.docs.map(doc => {
-            // Log the document ID (Firestore's auto-generated ID)
-            console.log("Fetched document ID:", doc.id);
-
-            // Now using `name` field in the vehicle object
-            return {
-                id: doc.id,  // The Firestore document ID (auto-generated, treated as string)
-                name: doc.data().name || "",  // This is now the field `name` in Firestore
-                vin: doc.data().vin || "",
-                licensePlate: doc.data().licensePlate || "",
-                status: doc.data().status || "",
-                note: doc.data().note || ""
-            };
-        });
+        const vehicleList: Vehicle[] = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            name: doc.data().name || "",
+            vin: doc.data().vin || "",
+            licensePlate: doc.data().licensePlate || "",
+            status: doc.data().status || "Available",
+            note: doc.data().note || ""
+        }));
         setVehicles(vehicleList);
     };
 
@@ -55,6 +52,38 @@ export default function AdminPage() {
             fetchVehicles();
         }
     }, [loading, user]);
+
+    // Add vehicle to Firestore
+    const handleAddVehicle = async () => {
+        if (!vehicleName || !vin || !licensePlate) {
+            alert("Please fill out all fields.");
+            return;
+        }
+
+        const newVehicle = {
+            name: vehicleName,
+            vin,
+            licensePlate,
+            status: "Available",
+            note: ""
+        };
+
+        try {
+            await addDoc(collection(db, "vehicles"), newVehicle);
+
+            // Clear form fields
+            setVehicleName("");
+            setVin("");
+            setLicensePlate("");
+
+            // Refresh the vehicle list
+            fetchVehicles();
+            alert("Vehicle added successfully!");
+        } catch (error) {
+            console.error("Error adding vehicle:", error);
+            alert("Failed to add vehicle.");
+        }
+    };
 
     // Save changes to Firestore
     const handleSave = async () => {
@@ -113,13 +142,9 @@ export default function AdminPage() {
                     <h2 className="text-2xl font-bold tracking-tight">Vehicles</h2>
                 </div>
 
-                <div className="flex">
+                <div className="flex space-x-8">
                     <div className="w-1/2 rounded-md border">
-                        <div className="flex bg-gray-100 font-bold p-3 px-12 border-b">
-                            <div className="w-2/5 text-left px-6">Action</div>
-                            <div className="w-1/5 text-center">Vehicle</div>
-                            <div className="w-2/5 text-right">Status</div>
-                        </div>
+                        <div className="flex bg-gray-100 font-bold p-3 px-12 border-b">Vehicle List</div>
 
                         <ScrollArea className="h-[450px] w-full">
                             <div className="space-y-0">
@@ -139,7 +164,6 @@ export default function AdminPage() {
                                                         Update Status
                                                     </Button>
                                                 </PopoverTrigger>
-
                                                 {selectedVehicle?.id === vehicle.id && (
                                                     <PopoverContent className="w-72 p-4 space-y-4">
                                                         <h4 className="text-sm font-medium">Update Status for {vehicle.name}</h4>
@@ -175,9 +199,11 @@ export default function AdminPage() {
                                                 <TooltipTrigger asChild>
                                                     <span className={` px-2 py-1 rounded-lg font-medium
                                                         ${vehicle.status === "In Use" ? "bg-blue-200 text-blue-800" :
-                                                        vehicle.status === "Available" ? "bg-green-200 text-green-800" :
-                                                        vehicle.status === "Out of Service" ? "bg-red-200 text-red-800" : ""}
-                                                    `}>{vehicle.status}</span>
+                                                            vehicle.status === "Available" ? "bg-green-200 text-green-800" :
+                                                            "bg-red-200 text-red-800"}`}
+                                                    >
+                                                        {vehicle.status}
+                                                    </span>
                                                 </TooltipTrigger>
                                                 <TooltipContent>{vehicle.note || "No Note"}</TooltipContent>
                                             </Tooltip>
@@ -186,6 +212,52 @@ export default function AdminPage() {
                                 ))}
                             </div>
                         </ScrollArea>
+                    </div>
+
+                    <div className="w-1/2 h-1/2 rounded-md border">
+                        <div className="flex bg-gray-100 font-bold p-3 px-12 border-b">Add a Vehicle</div>
+
+                        <div className="p-4 space-y-4">
+                            <div className="flex space-x-4">
+                                <div className="flex-1">
+                                    <label className="block text-sm font-medium py-2">Vehicle Number:</label>
+                                    <Input
+                                        type="text"
+                                        value={vehicleName}
+                                        onChange={(e) => setVehicleName(e.target.value)}
+                                        placeholder="Enter vehicle number"
+                                    />
+                                </div>
+
+                                <div className="flex-1">
+                                    <label className="block text-sm font-medium py-2">License Plate:</label>
+                                    <Input
+                                        type="text"
+                                        value={licensePlate}
+                                        onChange={(e) => setLicensePlate(e.target.value)}
+                                        placeholder="Enter license plate"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex space-x-4">
+                                <div className="flex-1">
+                                    <label className="block text-sm font-medium py-2">Vehicle VIN:</label>
+                                    <Input
+                                        type="text"
+                                        value={vin}
+                                        onChange={(e) => setVin(e.target.value)}
+                                        placeholder="Enter VIN"
+                                    />
+                                </div>
+
+                                <div className="flex-1 flex py-8 justify-center items-center">
+                                    <Button onClick={handleAddVehicle} className="bg-gray-200 text-black px-6 py-2 text-sm font-small hover:bg-black hover:text-white">
+                                        Add to Database
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
