@@ -1,12 +1,13 @@
 'use client'; 
 import { useState, useEffect } from 'react';
-import { collection, getDocs, doc, updateDoc, addDoc } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc, addDoc, deleteDoc } from "firebase/firestore";
 import { db } from '@/src/firebase/config';
 import { AppSidebar } from "@/components/app-sidebar";
 import { ScrollArea, ScrollBar } from "@/components/bus-status-scrollable";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"; 
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"; 
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Checkbox } from '@radix-ui/react-checkbox';
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { useAuth } from "@/context/AuthContext";  
@@ -31,6 +32,9 @@ export default function AdminPage() {
     const [vehicleName, setVehicleName] = useState<string>("");
     const [vin, setVin] = useState<string>("");
     const [licensePlate, setLicensePlate] = useState<string>("");
+
+    const [vehicleToRemove, setVehicleToRemove] = useState<Vehicle | null>(null);
+    const [plateInput, setPlateInput] = useState<string>("");
 
     const fetchVehicles = async () => {
         if (!user) return;
@@ -82,6 +86,33 @@ export default function AdminPage() {
         } catch (error) {
             console.error("Error adding vehicle:", error);
             alert("Failed to add vehicle.");
+        }
+    };
+
+    const handleRemoveVehicle = async () => {
+        if (!vehicleToRemove) {
+            alert("Please select a vehicle.");
+            return;
+        }
+    
+        if (plateInput !== vehicleToRemove.licensePlate) {
+            alert("License plate does not match. Removal denied.");
+            return;
+        }
+    
+        try {
+            const vehicleRef = doc(db, "vehicles", vehicleToRemove.id);
+            await deleteDoc(vehicleRef);  // Use deleteDoc() here
+    
+            alert(`Vehicle ${vehicleToRemove.name} removed successfully.`);
+    
+            // Refresh the list
+            fetchVehicles();
+            setVehicleToRemove(null);
+            setPlateInput("");
+        } catch (error) {
+            console.error("Error removing vehicle:", error);
+            alert("Failed to remove vehicle.");
         }
     };
 
@@ -214,50 +245,119 @@ export default function AdminPage() {
                         </ScrollArea>
                     </div>
 
-                    <div className="w-1/2 h-1/2 rounded-md border">
-                        <div className="flex bg-gray-100 font-bold p-3 px-12 border-b">Add a Vehicle</div>
+                    <div className="flex w-1/2 h-full space-y-4 flex-col">
+                        <div className="flex-1 rounded-md border">
+                            <div className="flex bg-gray-100 font-bold p-3 px-12 border-b">Add a Vehicle</div>
 
-                        <div className="p-4 space-y-4">
-                            <div className="flex space-x-4">
-                                <div className="flex-1">
-                                    <label className="block text-sm font-medium py-2">Vehicle Number:</label>
-                                    <Input
-                                        type="text"
-                                        value={vehicleName}
-                                        onChange={(e) => setVehicleName(e.target.value)}
-                                        placeholder="Enter vehicle number"
-                                    />
+                            <div className="p-4 space-y-4">
+                                <div className="flex space-x-4">
+                                    <div className="flex-1">
+                                        <label className="block text-sm font-medium py-2">Vehicle Number:</label>
+                                        <Input
+                                            type="text"
+                                            value={vehicleName}
+                                            onChange={(e) => setVehicleName(e.target.value)}
+                                            placeholder="Enter vehicle number (e.g. 123)"
+                                        />
+                                    </div>
+
+                                    <div className="flex-1">
+                                        <label className="block text-sm font-medium py-2">License Plate:</label>
+                                        <Input
+                                            type="text"
+                                            value={licensePlate}
+                                            onChange={(e) => setLicensePlate(e.target.value)}
+                                            placeholder="Enter license plate"
+                                        />
+                                    </div>
                                 </div>
 
-                                <div className="flex-1">
-                                    <label className="block text-sm font-medium py-2">License Plate:</label>
-                                    <Input
-                                        type="text"
-                                        value={licensePlate}
-                                        onChange={(e) => setLicensePlate(e.target.value)}
-                                        placeholder="Enter license plate"
-                                    />
-                                </div>
-                            </div>
+                                <div className="flex space-x-4">
+                                    <div className="flex-1">
+                                        <label className="block text-sm font-medium py-2">Vehicle VIN:</label>
+                                        <Input
+                                            type="text"
+                                            value={vin}
+                                            onChange={(e) => setVin(e.target.value)}
+                                            placeholder="Enter VIN"
+                                        />
+                                    </div>
 
-                            <div className="flex space-x-4">
-                                <div className="flex-1">
-                                    <label className="block text-sm font-medium py-2">Vehicle VIN:</label>
-                                    <Input
-                                        type="text"
-                                        value={vin}
-                                        onChange={(e) => setVin(e.target.value)}
-                                        placeholder="Enter VIN"
-                                    />
-                                </div>
-
-                                <div className="flex-1 flex py-8 justify-center items-center">
-                                    <Button onClick={handleAddVehicle} className="bg-gray-200 text-black px-6 py-2 text-sm font-small hover:bg-black hover:text-white">
-                                        Add to Database
-                                    </Button>
+                                    <div className="flex-1 flex py-8 justify-center items-center">
+                                        <Button onClick={handleAddVehicle} className="bg-gray-200 text-black px-6 py-2 text-sm font-small hover:bg-black hover:text-white">
+                                            Add to Database
+                                        </Button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
+
+                        <div className="flex-1 rounded-md border mt-4">
+                            <div className="flex bg-gray-100 font-bold p-3 px-12 border-b">Remove a Vehicle</div>
+                            <div className="p-4 space-y-4">
+
+                                {/* Vehicle selection dropdown */}
+                                <div className="flex space-x-4">
+                                    <div className="flex-1">
+                                        <label className="block text-sm font-medium py-2">Choose a Vehicle to Remove:</label>
+                                        <Select onValueChange={(value) => {
+                                            const vehicle = vehicles.find(v => v.id === value) || null;
+                                            setVehicleToRemove(vehicle);
+                                            setPlateInput("");
+                                        }}>
+                                            <SelectTrigger className="w-full">
+                                                <SelectValue placeholder="Select a vehicle" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {vehicles.map((v) => (
+                                                    <SelectItem key={v.id} value={v.id}>
+                                                        {v.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    {/* Display the license plate */}
+                                    <div className="flex-1">
+                                        <label className="block text-sm text-center font-medium py-2">Selected Vehicle Plate:</label>
+                                        <div className="text-center text-lg font-semibold">
+                                            {vehicleToRemove?.licensePlate || "N/A"}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Plate verification and remove button */}
+                                <div className="flex space-x-4">
+                                    <div className="flex-1">
+                                        <label className="block text-sm font-medium py-2">Verify the License Plate:</label>
+                                        <Input
+                                            type="text"
+                                            value={plateInput || ""}  // Ensure it's always controlled
+                                            onChange={(e) => setPlateInput(e.target.value)}
+                                            placeholder="Must match plate displayed"
+                                        />
+                                    </div>
+
+                                    <div className="flex-1 flex py-8 justify-center items-center">
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Button 
+                                                    onClick={handleRemoveVehicle} 
+                                                    className="bg-gray-200 text-black px-6 py-2 text-sm font-small hover:bg-red-600 hover:text-white"
+                                                >
+                                                    Remove from Database
+                                                </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <span className="text-sm">This cannot be undone!</span>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
             </div>
