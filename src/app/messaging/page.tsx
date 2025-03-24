@@ -1,88 +1,53 @@
 'use client';
-import { useEffect, useState } from 'react';
-import Cookies from 'js-cookie';
-import Image from 'next/image';
-import { Mail } from '@/components/mail';
-import { accounts, mails } from '../data';
-import React from 'react';
-import { useCallback } from 'react';
 
-export default function MailPage() {
-  const [defaultLayout, setDefaultLayout] = useState<[number, number]>([60, 40]);
+import { useState } from 'react';
+import { ChatBubbleExample } from '@/components/chat/chat-bubble-example';
+import { ChatInputExample } from '@/components/chat/chat-input-example';
+import { Avatar } from '@/components/chat/avatar';
 
-  useEffect(() => {
-    const cookieName = 'react-resizable-panels:layout';
-    const savedLayout = Cookies.get(cookieName);
-    
-    if (savedLayout) {
-      try {
-        const parsed = JSON.parse(savedLayout);
-        if (Array.isArray(parsed) && parsed.length === 2 &&
-            parsed.every(size => typeof size === 'number' && !isNaN(size))) {
-          // Ensure minimum sizes are respected
-          const validSizes = parsed.map(size => Math.max(30, size));
-          const total = validSizes.reduce((sum, size) => sum + size, 0);
-          setDefaultLayout([
-            (validSizes[0] / total) * 100,
-            (validSizes[1] / total) * 100
-          ]);
-        }
-      } catch (e) {
-        console.error('Failed to parse layout:', e);
-        // Keep default layout
-      }
-    }
-  }, []);
+export default function MessagingPage() {
+  const [messages, setMessages] = useState([
+    { id: 1, sender: 'Jane Doe', text: 'How has your day been so far?', time: '10:06 AM' },
+    { id: 2, sender: 'You', text: 'It has been good. I went for a run this morning and then had a nice breakfast. How about you?', time: '10:10 AM' }
+  ]);
 
-  const handleLayoutChange = useCallback((sizes: number[]) => {
-    if (sizes.length !== 2 || sizes.some(size => isNaN(size))) {
-      return;
-    }
-    
-    // Ensure minimum sizes and normalization
-    const validSizes = sizes.map(size => Math.max(30, size));
-    const total = validSizes.reduce((sum, size) => sum + size, 0);
-    const normalized = [
-      (validSizes[0] / total) * 100,
-      (validSizes[1] / total) * 100
-    ];
-    
-    Cookies.set('react-resizable-panels:layout', JSON.stringify(normalized), {
-      expires: 365,
-      path: '/messaging',
-      sameSite: 'strict'
-    });
-  }, []);
-
-  if (!defaultLayout) return null;
+  const sendMessage = (messageText: string) => {
+    setMessages([...messages, { id: messages.length + 1, sender: 'You', text: messageText, time: '8:08 PM' }]);
+  };
 
   return (
-    <>
-      <div className="md:hidden">
-        <Image
-          src="/examples/mail-dark.png"
-          width={1280}
-          height={727}
-          alt="Mail"
-          className="hidden dark:block"
-        />
-        <Image
-          src="/examples/mail-light.png"
-          width={1280}
-          height={727}
-          alt="Mail"
-          className="block dark:hidden"
-        />
+    <div className="flex h-screen bg-black text-white">
+      {/* Sidebar */}
+      <div className="w-1/4 border-r border-gray-700 p-4">
+        <h2 className="text-xl font-bold">Chats (4)</h2>
+        <div className="mt-4">
+          <Avatar name="Jane Doe" status="Typing..." />
+          <Avatar name="John Doe" />
+          <Avatar name="Elizabeth Smith" />
+          <Avatar name="John Smith" />
+        </div>
       </div>
-      <div className="hidden flex-col md:flex">
-        <Mail
-          accounts={accounts}
-          mails={mails}
-          defaultLayout={defaultLayout}
-          navCollapsedSize={4}
-          onLayoutChange={handleLayoutChange}
-        />
+
+      {/* Chat Area */}
+      <div className="w-3/4 flex flex-col">
+        <div className="p-4 border-b border-gray-700 flex items-center">
+          <Avatar name="Jane Doe" />
+          <div className="ml-4">
+            <h3 className="text-lg font-bold">Jane Doe</h3>
+            <p className="text-sm text-gray-400">Active 2 mins ago</p>
+          </div>
+        </div>
+
+        <div className="flex-1 p-4 overflow-y-auto">
+          {messages.map((msg) => (
+            <ChatBubbleExample key={msg.id} sender={msg.sender} text={msg.text} time={msg.time} />
+          ))}
+        </div>
+
+        <div className="p-4 border-t border-gray-700">
+          <ChatInputExample onSendMessage={sendMessage} />
+        </div>
       </div>
-    </>
+    </div>
   );
 }
