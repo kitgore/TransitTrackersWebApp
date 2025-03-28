@@ -34,6 +34,8 @@ export default function GanttChartPage() {
     { id: 'Task 9', content: 'Task 9' },
     { id: 'Task 10', content: 'Task 10' }
   ]);
+
+  const colors = { bg: '#18181b', border: '#18181b' };
   
   // State for tasks - start with empty array
   const [tasks, setTasks] = useState([]);
@@ -45,11 +47,11 @@ export default function GanttChartPage() {
       {
         id: 'task1',
         group: 'Task 0',
-        content: 'Item 0',
+        content: 'Benjamin Griepp | 8:00-11:30',
         start: createDateAtHour(8),
         end: createDateAtHour(11, 30),
         className: 'task-item',
-        style: 'background-color: #D0E8FF; border-color: #2196F3;'
+        style: ``
       },
       {
         id: 'task2',
@@ -58,7 +60,7 @@ export default function GanttChartPage() {
         start: createDateAtHour(10),
         end: createDateAtHour(16),
         className: 'task-item',
-        style: 'background-color: #D5E8D4; border-color: #82B366;'
+        style: ``
       },
       {
         id: 'task3',
@@ -67,7 +69,7 @@ export default function GanttChartPage() {
         start: createDateAtHour(13),
         end: createDateAtHour(15, 30),
         className: 'task-item',
-        style: 'background-color: #FFE6CC; border-color: #FFB570;'
+        style: ``
       },
       {
         id: 'task4',
@@ -76,7 +78,7 @@ export default function GanttChartPage() {
         start: createDateAtHour(9, 30),
         end: createDateAtHour(12),
         className: 'task-item',
-        style: 'background-color: #E1D5E7; border-color: #9673A6;'
+        style: ``
       },
       {
         id: 'task5',
@@ -85,7 +87,7 @@ export default function GanttChartPage() {
         start: createDateAtHour(11),
         end: createDateAtHour(14),
         className: 'task-item',
-        style: 'background-color: #FFF2CC; border-color: #D6B656;'
+        style: ``
       }
     ];
     
@@ -133,16 +135,6 @@ export default function GanttChartPage() {
     const groupIndex = Math.floor(Math.random() * groups.length);
     const group = groups[groupIndex].id;
     
-    // Random color
-    const colors = [
-      { bg: '#D0E8FF', border: '#2196F3' },
-      { bg: '#D5E8D4', border: '#82B366' },
-      { bg: '#FFE6CC', border: '#FFB570' },
-      { bg: '#E1D5E7', border: '#9673A6' },
-      { bg: '#FFF2CC', border: '#D6B656' }
-    ];
-    const colorIndex = Math.floor(Math.random() * colors.length);
-    
     // Create new task with string ID
     const newTask = {
       id: `task${Date.now()}`, // String ID to ensure consistency
@@ -151,7 +143,6 @@ export default function GanttChartPage() {
       start: startTime,
       end: endTime,
       className: 'task-item',
-      style: `background-color: ${colors[colorIndex].bg}; border-color: ${colors[colorIndex].border};`
     };
     
     console.log('Adding new task with consistent format:', newTask);
@@ -186,11 +177,13 @@ export default function GanttChartPage() {
       
       <style jsx global>{`
         .task-item {
-          color: #333;
-          border-radius: 4px;
+          color: #fafafa;
           border-width: 1px;
           border-style: solid;
           box-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+          background-color: #18181b;
+          border-color: #18181b;
+          border-radius: calc(var(--radius) - 2px) !important;
         }
         .vis-item.vis-selected {
           border-color: #FFA500;
