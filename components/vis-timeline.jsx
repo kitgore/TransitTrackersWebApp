@@ -5,15 +5,22 @@ import { Timeline } from 'vis-timeline/standalone';
 import { DataSet } from 'vis-data/standalone';
 import 'vis-timeline/styles/vis-timeline-graph2d.min.css';
 
-const GanttTimeline = ({ items = [], groups = [], options = {}, className = '' }) => {
+const GanttTimeline = ({ 
+  items = [], 
+  groups = [], 
+  options = {}, 
+  className = '',
+  onTimeChange,
+  getTimelineRef
+}) => {
   const containerRef = useRef(null);
   const timelineRef = useRef(null);
   const itemsDatasetRef = useRef(null);
   const groupsDatasetRef = useRef(null);
 
-  // Debug logging function
+  // Debug logging function with timestamps
   const logDebug = (title, data) => {
-    console.log(`🔍 ${title}:`, data);
+    // console.log(`⏰ ${new Date().toLocaleTimeString()} | 🔍 ${title}:`, data);
   };
 
   // Create timeline on mount
@@ -73,6 +80,125 @@ const GanttTimeline = ({ items = [], groups = [], options = {}, className = '' }
         timelineRef.current.setWindow(options.min, options.max, { animation: false });
       }
       
+      // Register ALL possible timeline events to see which ones fire
+      if (onTimeChange) {
+        console.log('🔌 Registering ALL timeline events');
+        
+        // These events happen when items are moved/changed
+        timelineRef.current.on('itemover', (props) => logDebug('📌 EVENT: itemover fired', props));
+        timelineRef.current.on('itemout', (props) => logDebug('📌 EVENT: itemout fired', props));
+        timelineRef.current.on('itemselect', (props) => logDebug('📌 EVENT: itemselect fired', props));
+        timelineRef.current.on('timechange', (props) => logDebug('📌 EVENT: timechange fired', props));
+        timelineRef.current.on('timechanged', (props) => logDebug('📌 EVENT: timechanged fired', props));
+        
+        timelineRef.current.on('click', (props) => logDebug('📌 EVENT: click fired', props));
+        timelineRef.current.on('doubleClick', (props) => logDebug('📌 EVENT: doubleClick fired', props));
+        timelineRef.current.on('contextmenu', (props) => logDebug('📌 EVENT: contextmenu fired', props));
+        
+        // Important! This is the main event for drag operations
+        timelineRef.current.on('rangechange', (props) => logDebug('📌 EVENT: rangechange fired', props));
+        timelineRef.current.on('rangechanged', (props) => logDebug('📌 EVENT: rangechanged fired', props));
+        
+        // Primary events for item operations
+        timelineRef.current.on('drop', (props) => logDebug('📌 EVENT: drop fired', props));
+        
+        // These are the item manipulation events
+        timelineRef.current.on('itemdrag', (props) => {
+          logDebug('📌 EVENT: itemdrag fired', props);
+        });
+        
+        timelineRef.current.on('itemdrop', (props) => {
+          logDebug('📌 EVENT: itemdrop fired', props);
+          if (props && props.item) {
+            const updatedItem = itemsDatasetRef.current.get(props.item);
+            if (updatedItem) {
+              logDebug('Calling onTimeChange with item after drop', updatedItem);
+              onTimeChange({
+                id: updatedItem.id,
+                start: updatedItem.start,
+                end: updatedItem.end,
+                group: updatedItem.group
+              });
+            }
+          }
+        });
+        
+        // The main move events
+        timelineRef.current.on('itemMove', (props) => {
+          logDebug('📌 EVENT: itemMove fired', props);
+          if (props && props.item) {
+            const updatedItem = itemsDatasetRef.current.get(props.item);
+            if (updatedItem) {
+              logDebug('Calling onTimeChange with item from itemMove', updatedItem);
+              onTimeChange({
+                id: updatedItem.id,
+                start: updatedItem.start,
+                end: updatedItem.end,
+                group: updatedItem.group
+              });
+            }
+          }
+        });
+        
+        timelineRef.current.on('itemMoved', (props) => {
+          logDebug('📌 EVENT: itemMoved fired', props);
+          if (props && props.item) {
+            const updatedItem = itemsDatasetRef.current.get(props.item);
+            if (updatedItem) {
+              logDebug('Calling onTimeChange with item from itemMoved', updatedItem);
+              onTimeChange({
+                id: updatedItem.id,
+                start: updatedItem.start,
+                end: updatedItem.end,
+                group: updatedItem.group
+              });
+            }
+          }
+        });
+        
+        // For resizing operations
+        timelineRef.current.on('itemAdd', (props) => {
+          logDebug('📌 EVENT: itemAdd fired', props);
+        });
+        
+        timelineRef.current.on('itemUpdate', (props) => {
+          logDebug('📌 EVENT: itemUpdate fired', props);
+          if (props && props.item) {
+            const updatedItem = itemsDatasetRef.current.get(props.item);
+            if (updatedItem) {
+              logDebug('Calling onTimeChange with item from itemUpdate', updatedItem);
+              onTimeChange({
+                id: updatedItem.id,
+                start: updatedItem.start,
+                end: updatedItem.end,
+                group: updatedItem.group
+              });
+            }
+          }
+        });
+        
+        timelineRef.current.on('itemUpdated', (props) => {
+          logDebug('📌 EVENT: itemUpdated fired', props);
+          if (props && props.item) {
+            const updatedItem = itemsDatasetRef.current.get(props.item);
+            if (updatedItem) {
+              logDebug('Calling onTimeChange with item from itemUpdated', updatedItem);
+              onTimeChange({
+                id: updatedItem.id,
+                start: updatedItem.start,
+                end: updatedItem.end,
+                group: updatedItem.group
+              });
+            }
+          }
+        });
+      }
+      
+      // Make the timeline reference available to the parent component
+      if (getTimelineRef) {
+        getTimelineRef(timelineRef.current);
+      }
+      
       logDebug('Timeline created successfully', timelineRef.current);
     } catch (error) {
       console.error('Error initializing timeline:', error);
@@ -86,34 +212,52 @@ const GanttTimeline = ({ items = [], groups = [], options = {}, className = '' }
     };
   }, []);
 
+  // Listen for direct changes to the DataSet
+  useEffect(() => {
+    if (!itemsDatasetRef.current || !onTimeChange) return;
+    
+    const onChange = (event, properties) => {
+      logDebug('📊 DataSet CHANGED event', { event, properties });
+      
+      // When items are directly updated in the dataset
+      if (properties.items && properties.items.length > 0) {
+        properties.items.forEach(itemId => {
+          const updatedItem = itemsDatasetRef.current.get(itemId);
+          if (updatedItem) {
+            logDebug('DataSet item changed', updatedItem);
+            onTimeChange({
+              id: updatedItem.id,
+              start: updatedItem.start,
+              end: updatedItem.end,
+              group: updatedItem.group
+            });
+          }
+        });
+      }
+    };
+    
+    // Listen for changes directly on the DataSet
+    itemsDatasetRef.current.on('update', onChange);
+    
+    return () => {
+      if (itemsDatasetRef.current) {
+        itemsDatasetRef.current.off('update', onChange);
+      }
+    };
+  }, [onTimeChange]);
+
   // Update items when they change
   useEffect(() => {
     if (!timelineRef.current || !itemsDatasetRef.current) return;
     
-    logDebug('Items received', items);
+    logDebug('Items received for update', items);
     
     try {
-      // Log current items before updating
-      const currentItems = itemsDatasetRef.current.get();
-      logDebug('Current items before update', currentItems);
-      
-      // Clear and add all items
+      // Clear and add all items (since we're having issues with updates)
       itemsDatasetRef.current.clear();
+      itemsDatasetRef.current.add(items);
       
-      // Log each item as we add it
-      items.forEach((item, index) => {
-        logDebug(`Adding item ${index}`, item);
-        try {
-          itemsDatasetRef.current.add(item);
-        } catch (err) {
-          console.error(`Error adding item ${index}:`, err, item);
-        }
-      });
-      
-      // Log items after update
-      const updatedItems = itemsDatasetRef.current.get();
-      logDebug('Items after update', updatedItems);
-      
+      logDebug('Items after complete refresh', itemsDatasetRef.current.get());
     } catch (error) {
       console.error('Error updating items:', error);
     }
