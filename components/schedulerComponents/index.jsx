@@ -36,7 +36,7 @@ import wrapperFun from './WrapperFun';
 class Scheduler extends Component {
   constructor(props) {
     super(props);
-
+  
     const { schedulerData, dndSources, parentRef } = props;
     let sources = [];
     sources.push(new DnDSource(dndProps => dndProps.eventItem, EventItem, schedulerData.config.dragAndDropEnabled));
@@ -44,7 +44,7 @@ class Scheduler extends Component {
       sources = [...sources, ...dndSources];
     }
     const dndContext = new DnDContext(sources, ResourceEvents);
-
+  
     this.currentArea = -1;
     this.state = {
       dndContext,
@@ -57,8 +57,14 @@ class Scheduler extends Component {
     };
     this.scrollLeft = 0;
     this.scrollTop = 0;
-
-    if ((schedulerData.isSchedulerResponsive() && !schedulerData.config.responsiveByParent) || parentRef === undefined) {
+    this.containerRef = React.createRef();
+  
+    // Always try to be responsive
+    if (parentRef !== undefined) {
+      // Use the parent container width if provided
+      schedulerData._setDocumentWidth(parentRef.current ? parentRef.current.offsetWidth : document.documentElement.clientWidth);
+    } else {
+      // Fall back to window width
       schedulerData._setDocumentWidth(document.documentElement.clientWidth);
       window.onresize = this.onWindowResize;
     }
