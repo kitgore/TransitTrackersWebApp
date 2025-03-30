@@ -85,19 +85,19 @@ export default function GanttChartPage() {
       createTask('Linda Thompson', createDateAtHour(14), createDateAtHour(18), 'Task 2'),
       
       // Task 3 - Multiple shorter tasks
-      createTask('Alex Johnson', createDateAtHour(8), createDateAtHour(10), 'Task 3'),
+      createTask('AVAILABLE', createDateAtHour(8), createDateAtHour(10), 'Task 3'),
       createTask('Thomas Brown', createDateAtHour(10, 15), createDateAtHour(12), 'Task 3'),
       createTask('Jessica Lee', createDateAtHour(12, 15), createDateAtHour(14, 45), 'Task 3'),
       createTask('Andrew Clark', createDateAtHour(15), createDateAtHour(18), 'Task 3'),
       
       // Task 4 - Distributed throughout the day
-      createTask('Sarah Williams', createDateAtHour(8), createDateAtHour(9, 45), 'Task 4'),
+      createTask('AVAILABLE', createDateAtHour(8), createDateAtHour(9, 45), 'Task 4'),
       createTask('Olivia Green', createDateAtHour(10), createDateAtHour(13), 'Task 4'),
       createTask('Noah Adams', createDateAtHour(13, 15), createDateAtHour(16, 30), 'Task 4'),
       createTask('Maria Garcia', createDateAtHour(16, 45), createDateAtHour(18), 'Task 4'),
       
       // Task 5 - Mix of task durations
-      createTask('William Baker', createDateAtHour(8), createDateAtHour(11), 'Task 5'),
+      createTask('AVAILABLE', createDateAtHour(8), createDateAtHour(11), 'Task 5'),
       createTask('Emma White', createDateAtHour(11, 15), createDateAtHour(14, 30), 'Task 5'),
       createTask('James Robinson', createDateAtHour(15), createDateAtHour(18), 'Task 5'),
       
