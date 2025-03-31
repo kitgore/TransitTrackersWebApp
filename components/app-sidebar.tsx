@@ -93,7 +93,7 @@ export function AppSidebar({ children }: Omit<SidebarProps, 'breadcrumb'>) {
           <NavUser user={userData} />
         </SidebarHeader>
         <SidebarContent>
-          <DatePicker />
+          {/* <DatePicker /> */}
           <SidebarSeparator className="mx-0" />
           <NavItems items={navigationItems} />
         </SidebarContent>

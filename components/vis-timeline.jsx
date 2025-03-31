@@ -20,7 +20,7 @@ const GanttTimeline = ({
 
   // Debug logging function with timestamps
   const logDebug = (title, data) => {
-    // console.log(`⏰ ${new Date().toLocaleTimeString()} | 🔍 ${title}:`, data);
+    console.log(`⏰ ${new Date().toLocaleTimeString()} | 🔍 ${title}:`, data);
   };
 
   // Create timeline on mount
@@ -196,7 +196,8 @@ const GanttTimeline = ({
       
       // Make the timeline reference available to the parent component
       if (getTimelineRef) {
-        getTimelineRef(timelineRef.current);
+        // Pass the timeline reference AND the datasets to the parent
+        getTimelineRef(timelineRef.current, itemsDatasetRef.current, groupsDatasetRef.current);
       }
       
       logDebug('Timeline created successfully', timelineRef.current);
