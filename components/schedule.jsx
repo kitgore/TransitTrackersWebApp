@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import GanttTimeline from '@/components/vis-timeline'; // Adjust path as needed
 import {
   Dialog,
@@ -14,7 +14,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-export default function GanttChartPage() {
+// Constants for shift status
+const SHIFT_STATUS = {
+  AVAILABLE: 'AVAILABLE',
+  ASSIGNED: 'ASSIGNED',
+  PENDING: 'PENDING',
+};
+
+// Constants for date formatting
+const DATE_FORMATS = {
+  ISO: 'iso',
+  DISPLAY: 'display',
+};
+
+export default function ShiftScheduler() {
   // Reference to timeline for event handling
   const timelineRef = useRef(null);
   
@@ -25,17 +38,26 @@ export default function GanttChartPage() {
   // Get today's date for creating the sample data
   const today = new Date();
   
+  // Track click information
+  const lastClickRef = useRef({
+    time: 0,
+    item: null
+  });
+  
   // State for dialog control
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [newShiftData, setNewShiftData] = useState({
     id: '',
-    name: 'AVAILABLE',
+    name: SHIFT_STATUS.AVAILABLE,
     startTime: null,
     endTime: null,
     group: '',
+    groupName: '',
     formattedStartTime: '',
-    formattedEndTime: ''
+    formattedEndTime: '',
+    status: SHIFT_STATUS.AVAILABLE,
+    userId: null,
   });
   
   // State for editing an existing shift
@@ -47,8 +69,32 @@ export default function GanttChartPage() {
     group: '',
     groupName: '',
     formattedStartTime: '',
-    formattedEndTime: ''
+    formattedEndTime: '',
+    status: '',
+    userId: null,
   });
+
+  // Define the shift groups (rows in the Gantt chart)
+  const [groups] = useState([
+    { id: 'Shift 0', content: 'AXE 2' },
+    { id: 'Shift 1', content: 'AXE 3' },
+    { id: 'Shift 2', content: 'AXE 4' },
+    { id: 'Shift 3', content: 'Jacks 1' },
+    { id: 'Shift 4', content: 'Jacks 2' },
+    { id: 'Shift 5', content: 'Jacks 3' },
+    { id: 'Shift 6', content: 'Clean/Fuel' },
+    { id: 'Shift 7', content: 'Louie 1' },
+    { id: 'Shift 8', content: 'Louie 2' },
+    { id: 'Shift 9', content: 'Louie 3' },
+    { id: 'Shift 10', content: 'Louie 4' }
+  ]);
+
+  const colors = { bg: '#18181b', border: '#18181b' };
+  
+  // State for shifts - start with empty array
+  const [shifts, setShifts] = useState([]);
+  
+  // ========== Utility Functions ==========
   
   // Format date consistently - this is critical!
   const formatDateForTimeline = (date) => {
@@ -85,108 +131,208 @@ export default function GanttChartPage() {
     date.setHours(hours, minutes, 0, 0);
     return date;
   };
+
+  // Format date header
+  const formatDateHeader = (date) => {
+    const options = { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    };
+    return date.toLocaleDateString('en-US', options);
+  };
   
-  // Create a shift with proper format
-  const createShift = (name, startTime, endTime, group) => {
+  // Function to determine if a shift is available
+  const isShiftAvailable = (name) => {
+    return name.toUpperCase() === SHIFT_STATUS.AVAILABLE;
+  };
+  
+  // Get group name by ID
+  const getGroupNameById = (groupId) => {
+    const group = groups.find(g => g.id === groupId);
+    return group ? group.content : groupId;
+  };
+
+  // ========== Firebase Integration Functions ==========
+  
+  // These would be implemented later when adding Firebase
+  const fetchShiftsFromFirebase = useCallback(async () => {
+    // This will be implemented when adding Firebase
+    console.log('Fetching shifts from Firebase...');
+    return [];
+  }, []);
+
+  const saveShiftToFirebase = useCallback(async (shift) => {
+    // This will be implemented when adding Firebase
+    console.log('Saving shift to Firebase:', shift);
+    return shift;
+  }, []);
+
+  const updateShiftInFirebase = useCallback(async (shift) => {
+    // This will be implemented when adding Firebase
+    console.log('Updating shift in Firebase:', shift);
+    return shift;
+  }, []);
+
+  const deleteShiftFromFirebase = useCallback(async (shiftId) => {
+    // This will be implemented when adding Firebase
+    console.log('Deleting shift from Firebase:', shiftId);
+    return true;
+  }, []);
+  
+  // ========== Shift Management Functions ==========
+  
+  // Create a shift object with proper format
+  const createShiftObject = ({
+    name, 
+    startTime, 
+    endTime, 
+    group, 
+    id = `shift${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    userId = null,
+  }) => {
     const timeDisplay = `${formatTimeDisplay(startTime)}-${formatTimeDisplay(endTime)}`;
+    const status = isShiftAvailable(name) ? SHIFT_STATUS.AVAILABLE : SHIFT_STATUS.ASSIGNED;
+    
     return {
-      id: `shift${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      group: group,
+      id,
+      group,
       content: `${name} | ${timeDisplay}`,
-      start: startTime,
-      end: endTime,
-      className: 'shift-item',
-      name: name, // Store the original name for later updates
+      start: formatDateForTimeline(startTime),
+      end: formatDateForTimeline(endTime),
+      className: status === SHIFT_STATUS.AVAILABLE ? 'shift-item available-shift' : 'shift-item',
+      name,
+      status,
+      userId,
+      
+      // For Firestore (these properties would be used when saving to Firebase)
+      // Using separate fields for easier querying
+      startTimeISO: formatDateForTimeline(startTime),
+      endTimeISO: formatDateForTimeline(endTime),
+      startTimeFormatted: formatTimeDisplay(startTime),
+      endTimeFormatted: formatTimeDisplay(endTime),
+      groupName: getGroupNameById(group),
+      createdAt: new Date(),
+      updatedAt: new Date(),
     };
   };
 
-  // Define the shift groups (rows in the Gantt chart)
-  const [groups] = useState([
-    { id: 'Shift 0', content: 'AXE 2' },
-    { id: 'Shift 1', content: 'AXE 3' },
-    { id: 'Shift 2', content: 'AXE 4' },
-    { id: 'Shift 3', content: 'Jacks 1' },
-    { id: 'Shift 4', content: 'Jacks 2' },
-    { id: 'Shift 5', content: 'Jacks 3' },
-    { id: 'Shift 6', content: 'Clean/Fuel' },
-    { id: 'Shift 7', content: 'Louie 1' },
-    { id: 'Shift 8', content: 'Louie 2' },
-    { id: 'Shift 9', content: 'Louie 3' },
-    { id: 'Shift 10', content: 'Louie 4' }
-  ]);
-
-  const colors = { bg: '#18181b', border: '#18181b' };
-  
-  // State for shifts - start with empty array
-  const [shifts, setShifts] = useState([]);
-  
   // Initialize shifts with consistent date format after component mounts
   useEffect(() => {
-    // Sample shifts with specific start and end times
-    const initialShifts = [
-      // Shift 0 - Morning to afternoon
-      createShift('Benjamin Griepp', createDateAtHour(8), createDateAtHour(11, 30), 'Shift 0'),
-      createShift('Drake Stanton', createDateAtHour(12), createDateAtHour(15), 'Shift 0'),
-      createShift('Lauren Bushman', createDateAtHour(15, 30), createDateAtHour(18), 'Shift 0'),
+    const loadShifts = async () => {
+      // This would eventually fetch from Firebase
+      // For now, use sample data
       
-      // Shift 1 - Spread throughout the day
-      createShift('Alonso Jimenez', createDateAtHour(8), createDateAtHour(10), 'Shift 1'),
-      createShift('Michael Jones', createDateAtHour(10, 30), createDateAtHour(13), 'Shift 1'),
-      createShift('Sophia Park', createDateAtHour(13, 30), createDateAtHour(18), 'Shift 1'),
+      // Sample shifts with specific start and end times
+      const initialShifts = [
+        // Shift 0 - Morning to afternoon
+        createShiftObject({
+          name: 'Benjamin Griepp', 
+          startTime: new Date(createDateAtHour(8)), 
+          endTime: new Date(createDateAtHour(11, 30)), 
+          group: 'Shift 0',
+          userId: 'user123'
+        }),
+        createShiftObject({
+          name: 'Drake Stanton', 
+          startTime: new Date(createDateAtHour(12)), 
+          endTime: new Date(createDateAtHour(15)), 
+          group: 'Shift 0',
+          userId: 'user456'
+        }),
+        createShiftObject({
+          name: 'Lauren Bushman', 
+          startTime: new Date(createDateAtHour(15, 30)), 
+          endTime: new Date(createDateAtHour(18)), 
+          group: 'Shift 0',
+          userId: 'user789'
+        }),
+        
+        // Shift 1 - Spread throughout the day
+        createShiftObject({
+          name: 'Alonso Jimenez', 
+          startTime: new Date(createDateAtHour(8)), 
+          endTime: new Date(createDateAtHour(10)), 
+          group: 'Shift 1',
+          userId: 'user234'
+        }),
+        createShiftObject({
+          name: 'Michael Jones', 
+          startTime: new Date(createDateAtHour(10, 30)), 
+          endTime: new Date(createDateAtHour(13)), 
+          group: 'Shift 1',
+          userId: 'user567'
+        }),
+        createShiftObject({
+          name: 'Sophia Park', 
+          startTime: new Date(createDateAtHour(13, 30)), 
+          endTime: new Date(createDateAtHour(18)), 
+          group: 'Shift 1',
+          userId: 'user890'
+        }),
+        
+        // Shift 2 - Alternating short and long shifts
+        createShiftObject({
+          name: 'Jane Smith', 
+          startTime: new Date(createDateAtHour(8)), 
+          endTime: new Date(createDateAtHour(9, 30)), 
+          group: 'Shift 2',
+          userId: 'user345'
+        }),
+        createShiftObject({
+          name: 'David Wilson', 
+          startTime: new Date(createDateAtHour(10)), 
+          endTime: new Date(createDateAtHour(13, 30)), 
+          group: 'Shift 2',
+          userId: 'user678'
+        }),
+        createShiftObject({
+          name: 'Linda Thompson', 
+          startTime: new Date(createDateAtHour(14)), 
+          endTime: new Date(createDateAtHour(18)), 
+          group: 'Shift 2',
+          userId: 'user901'
+        }),
+        
+        // Shift 3 - Multiple shorter shifts
+        createShiftObject({
+          name: 'AVAILABLE', 
+          startTime: new Date(createDateAtHour(8)), 
+          endTime: new Date(createDateAtHour(10)), 
+          group: 'Shift 3'
+        }),
+        createShiftObject({
+          name: 'Thomas Brown', 
+          startTime: new Date(createDateAtHour(10, 15)), 
+          endTime: new Date(createDateAtHour(12)), 
+          group: 'Shift 3',
+          userId: 'user456'
+        }),
+        createShiftObject({
+          name: 'Jessica Lee', 
+          startTime: new Date(createDateAtHour(12, 15)), 
+          endTime: new Date(createDateAtHour(14, 45)), 
+          group: 'Shift 3',
+          userId: 'user789'
+        }),
+        createShiftObject({
+          name: 'Andrew Clark', 
+          startTime: new Date(createDateAtHour(15)), 
+          endTime: new Date(createDateAtHour(18)), 
+          group: 'Shift 3',
+          userId: 'user234'
+        }),
+      ];
       
-      // Shift 2 - Alternating short and long shifts
-      createShift('Jane Smith', createDateAtHour(8), createDateAtHour(9, 30), 'Shift 2'),
-      createShift('David Wilson', createDateAtHour(10), createDateAtHour(13, 30), 'Shift 2'),
-      createShift('Linda Thompson', createDateAtHour(14), createDateAtHour(18), 'Shift 2'),
+      // In the real implementation, you would fetch from Firebase:
+      // const firebaseShifts = await fetchShiftsFromFirebase();
       
-      // Shift 3 - Multiple shorter shifts
-      createShift('AVAILABLE', createDateAtHour(8), createDateAtHour(10), 'Shift 3'),
-      createShift('Thomas Brown', createDateAtHour(10, 15), createDateAtHour(12), 'Shift 3'),
-      createShift('Jessica Lee', createDateAtHour(12, 15), createDateAtHour(14, 45), 'Shift 3'),
-      createShift('Andrew Clark', createDateAtHour(15), createDateAtHour(18), 'Shift 3'),
-      
-      // Shift 4 - Distributed throughout the day
-      createShift('AVAILABLE', createDateAtHour(8), createDateAtHour(9, 45), 'Shift 4'),
-      createShift('Olivia Green', createDateAtHour(10), createDateAtHour(13), 'Shift 4'),
-      createShift('Noah Adams', createDateAtHour(13, 15), createDateAtHour(16, 30), 'Shift 4'),
-      createShift('Maria Garcia', createDateAtHour(16, 45), createDateAtHour(18), 'Shift 4'),
-      
-      // Shift 5 - Mix of shift durations
-      createShift('AVAILABLE', createDateAtHour(8), createDateAtHour(11), 'Shift 5'),
-      createShift('Emma White', createDateAtHour(11, 15), createDateAtHour(14, 30), 'Shift 5'),
-      createShift('James Robinson', createDateAtHour(15), createDateAtHour(18), 'Shift 5'),
-      
-      // Shift 6 - Even distribution
-      createShift('Ava Harris', createDateAtHour(8), createDateAtHour(10, 45), 'Shift 6'),
-      createShift('Mason Clark', createDateAtHour(11), createDateAtHour(14), 'Shift 6'),
-      createShift('Sophia Lewis', createDateAtHour(14, 15), createDateAtHour(18), 'Shift 6'),
-      
-      // Shift 7 - Varied shift lengths
-      createShift('Ethan Walker', createDateAtHour(8), createDateAtHour(9), 'Shift 7'),
-      createShift('Charlotte Young', createDateAtHour(9, 15), createDateAtHour(12, 30), 'Shift 7'),
-      createShift('Liam Miller', createDateAtHour(13), createDateAtHour(16), 'Shift 7'),
-      createShift('Amelia Moore', createDateAtHour(16, 15), createDateAtHour(18), 'Shift 7'),
-      
-      // Shift 8 - Two long shifts
-      createShift('Aiden Jackson', createDateAtHour(8), createDateAtHour(13), 'Shift 8'),
-      createShift('Isabella Allen', createDateAtHour(13, 30), createDateAtHour(18), 'Shift 8'),
-      
-      // Shift 9 - Multiple short shifts
-      createShift('Lucas Thomas', createDateAtHour(8), createDateAtHour(9, 30), 'Shift 9'),
-      createShift('Mia King', createDateAtHour(9, 45), createDateAtHour(11, 30), 'Shift 9'),
-      createShift('Harper Scott', createDateAtHour(11, 45), createDateAtHour(13, 15), 'Shift 9'),
-      createShift('Jacob Wright', createDateAtHour(13, 30), createDateAtHour(15), 'Shift 9'),
-      createShift('Abigail Turner', createDateAtHour(15, 15), createDateAtHour(16, 30), 'Shift 9'),
-      createShift('Benjamin Hill', createDateAtHour(16, 45), createDateAtHour(18), 'Shift 9'),
-      
-      // Shift 10 - Three equal blocks
-      createShift('Ella Evans', createDateAtHour(8), createDateAtHour(11, 20), 'Shift 10'),
-      createShift('Logan Carter', createDateAtHour(11, 30), createDateAtHour(14, 45), 'Shift 10'),
-      createShift('Grace Murphy', createDateAtHour(15), createDateAtHour(18), 'Shift 10'),
-    ];
+      console.log('Setting initial shifts with consistent format:', initialShifts);
+      setShifts(initialShifts);
+    };
     
-    console.log('Setting initial shifts with consistent format:', initialShifts);
-    setShifts(initialShifts);
+    loadShifts();
   }, []);
 
   // Timeline options with fixed window
@@ -215,6 +361,8 @@ export default function GanttChartPage() {
     }
   });
 
+  // ========== Event Handlers ==========
+  
   // Function to prepare dialog when clicking on the background
   const handleBackgroundClick = (clickEvent) => {
     if (clickEvent.what === 'background' && clickEvent.group && clickEvent.time) {
@@ -234,31 +382,26 @@ export default function GanttChartPage() {
       const endTime = new Date(clickedTime.getTime() + 3 * 60 * 60 * 1000);
       
       // Get group name for display
-      const groupObject = groups.find(g => g.id === group);
-      const groupName = groupObject ? groupObject.content : group;
+      const groupName = getGroupNameById(group);
       
       // Set new shift data for the dialog
       setNewShiftData({
         id: `shift${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        name: 'AVAILABLE',
+        name: SHIFT_STATUS.AVAILABLE,
         startTime: clickedTime,
         endTime: endTime,
         group: group,
         groupName: groupName,
         formattedStartTime: formatTimeInput(clickedTime),
-        formattedEndTime: formatTimeInput(endTime)
+        formattedEndTime: formatTimeInput(endTime),
+        status: SHIFT_STATUS.AVAILABLE,
+        userId: null
       });
       
       // Open the dialog
       setCreateDialogOpen(true);
     }
   };
-  
-  // Track click information
-  const lastClickRef = useRef({
-    time: 0,
-    item: null
-  });
   
   // Function to handle ANY click on the timeline
   const handleTimelineClick = (clickEvent) => {
@@ -287,45 +430,13 @@ export default function GanttChartPage() {
     }
   };
   
-  // Function to handle shift editing (previously handleTaskDoubleClick)
+  // Function to handle shift editing
   const handleShiftEdit = (itemId) => {
     console.log('Opening edit dialog for shift:', itemId);
     
-    // First try to find the shift in the React state
-    const shift = shifts.find(t => t.id === itemId);
-    
-    if (shift) {
-      console.log('Shift data found in state:', shift);
-      
-      // Convert string timestamps to Date objects
-      const startTime = new Date(shift.start);
-      const endTime = new Date(shift.end);
-      
-      // Get group name for display
-      const groupObject = groups.find(g => g.id === shift.group);
-      const groupName = groupObject ? groupObject.content : shift.group;
-      
-      // Set edit shift data for the dialog
-      setEditShiftData({
-        id: shift.id,
-        name: shift.name || 'AVAILABLE',
-        startTime: startTime,
-        endTime: endTime,
-        group: shift.group,
-        groupName: groupName,
-        formattedStartTime: formatTimeInput(startTime),
-        formattedEndTime: formatTimeInput(endTime)
-      });
-      
-      // Open the edit dialog
-      setEditDialogOpen(true);
-    } 
-    // If not found in state, try to get it from the dataset
-    else if (timelineRef.current && itemsDatasetRef.current) {
+    if (timelineRef.current && itemsDatasetRef.current) {
       try {
-        console.log('Shift not found in state, trying dataset...');
         const datasetItem = itemsDatasetRef.current.get(itemId);
-        
         if (datasetItem) {
           console.log('Shift data found in dataset:', datasetItem);
           
@@ -334,15 +445,14 @@ export default function GanttChartPage() {
           const endTime = new Date(datasetItem.end);
           
           // Try to extract the name from the content field
-          let name = 'AVAILABLE';
+          let name = SHIFT_STATUS.AVAILABLE;
           if (datasetItem.content && typeof datasetItem.content === 'string') {
             const contentParts = datasetItem.content.split('|');
-            name = contentParts[0]?.trim() || 'AVAILABLE';
+            name = contentParts[0]?.trim() || SHIFT_STATUS.AVAILABLE;
           }
           
           // Get group name for display
-          const groupObject = groups.find(g => g.id === datasetItem.group);
-          const groupName = groupObject ? groupObject.content : datasetItem.group;
+          const groupName = getGroupNameById(datasetItem.group);
           
           // Set edit shift data using the dataset item
           setEditShiftData({
@@ -353,13 +463,15 @@ export default function GanttChartPage() {
             group: datasetItem.group,
             groupName: groupName,
             formattedStartTime: formatTimeInput(startTime),
-            formattedEndTime: formatTimeInput(endTime)
+            formattedEndTime: formatTimeInput(endTime),
+            status: isShiftAvailable(name) ? SHIFT_STATUS.AVAILABLE : SHIFT_STATUS.ASSIGNED,
+            userId: datasetItem.userId || null
           });
           
           // Open the edit dialog
           setEditDialogOpen(true);
         } else {
-          console.log('Shift not found in dataset either:', itemId);
+          console.log('Shift not found in dataset:', itemId);
         }
       } catch (error) {
         console.error('Error accessing timeline dataset:', error);
@@ -368,21 +480,25 @@ export default function GanttChartPage() {
       console.log('Timeline or dataset refs not available yet');
     }
   };
-
+  
   // Function to add a shift from dialog data
-  const addShiftFromDialog = () => {
-    // Create a new shift
-    const newShift = {
-      id: newShiftData.id,
+  const addShiftFromDialog = async () => {
+    // Create a new shift object
+    const newShift = createShiftObject({
+      name: newShiftData.name,
+      startTime: newShiftData.startTime,
+      endTime: newShiftData.endTime,
       group: newShiftData.group,
-      content: `${newShiftData.name} | ${formatTimeDisplay(newShiftData.startTime)}-${formatTimeDisplay(newShiftData.endTime)}`,
-      start: formatDateForTimeline(newShiftData.startTime),
-      end: formatDateForTimeline(newShiftData.endTime),
-      className: 'shift-item',
-      name: newShiftData.name, // Store the original name for later updates
-    };
+      id: newShiftData.id,
+      userId: newShiftData.userId
+    });
     
     console.log('Adding new shift from dialog:', newShift);
+    
+    // In the future, this would be where we save to Firebase first
+    // const savedShift = await saveShiftToFirebase(newShift);
+    
+    // Then update the local state with the saved shift
     setShifts(prevShifts => [...prevShifts, newShift]);
     
     // Close the dialog
@@ -390,19 +506,36 @@ export default function GanttChartPage() {
   };
   
   // Function to update a shift from edit dialog data
-  const updateShiftFromDialog = () => {
+  const updateShiftFromDialog = async () => {
+    // Create updated shift object
+    const updatedShift = {
+      ...shifts.find(shift => shift.id === editShiftData.id),
+      name: editShiftData.name,
+      content: `${editShiftData.name} | ${formatTimeDisplay(editShiftData.startTime)}-${formatTimeDisplay(editShiftData.endTime)}`,
+      start: formatDateForTimeline(editShiftData.startTime),
+      end: formatDateForTimeline(editShiftData.endTime),
+      group: editShiftData.group,
+      status: isShiftAvailable(editShiftData.name) ? SHIFT_STATUS.AVAILABLE : SHIFT_STATUS.ASSIGNED,
+      className: isShiftAvailable(editShiftData.name) ? 'shift-item available-shift' : 'shift-item',
+      userId: editShiftData.userId,
+      
+      // For Firestore
+      startTimeISO: formatDateForTimeline(editShiftData.startTime),
+      endTimeISO: formatDateForTimeline(editShiftData.endTime),
+      startTimeFormatted: formatTimeDisplay(editShiftData.startTime),
+      endTimeFormatted: formatTimeDisplay(editShiftData.endTime),
+      groupName: getGroupNameById(editShiftData.group),
+      updatedAt: new Date(),
+    };
+    
+    // In the future, this would be where we update in Firebase first
+    // const updatedFirebaseShift = await updateShiftInFirebase(updatedShift);
+    
+    // Then update the local state
     setShifts(prevShifts => {
       return prevShifts.map(shift => {
         if (shift.id === editShiftData.id) {
-          // Create an updated shift object
-          return {
-            ...shift,
-            content: `${editShiftData.name} | ${formatTimeDisplay(editShiftData.startTime)}-${formatTimeDisplay(editShiftData.endTime)}`,
-            start: formatDateForTimeline(editShiftData.startTime),
-            end: formatDateForTimeline(editShiftData.endTime),
-            group: editShiftData.group,
-            name: editShiftData.name
-          };
+          return updatedShift;
         }
         return shift;
       });
@@ -413,48 +546,80 @@ export default function GanttChartPage() {
   };
   
   // Function to delete a shift
-  const deleteShift = () => {
+  const deleteShift = async () => {
+    // In the future, this would delete from Firebase first
+    // await deleteShiftFromFirebase(editShiftData.id);
+    
+    // Then update local state
     setShifts(prevShifts => prevShifts.filter(shift => shift.id !== editShiftData.id));
     
     // Close the dialog
     setEditDialogOpen(false);
   };
-
+  
   // Handle shift updates (when moved or resized)
-  const handleTimeChange = (event) => {
+  const handleTimeChange = async (event) => {
     console.log('Shift updated:', event);
     
     if (!event || !event.id) return;
     
+    // Find the shift that was changed
+    const originalShift = shifts.find(shift => shift.id === event.id);
+    
+    if (!originalShift) {
+      console.log('Original shift not found for update');
+      return;
+    }
+    
+    // Update in the timeline
     setShifts(prevShifts => {
       return prevShifts.map(shift => {
         if (shift.id === event.id) {
           // Make sure we're using the correct date format for display
-          const startTime = formatTimeDisplay(event.start);
-          const endTime = formatTimeDisplay(event.end);
-          const timeDisplay = `${startTime}-${endTime}`;
+          const startTime = new Date(event.start);
+          const endTime = new Date(event.end);
+          const timeDisplay = `${formatTimeDisplay(startTime)}-${formatTimeDisplay(endTime)}`;
+          const status = shift.status || (isShiftAvailable(shift.name) ? SHIFT_STATUS.AVAILABLE : SHIFT_STATUS.ASSIGNED);
           
           console.log(`Updating shift ${shift.id} with new time: ${timeDisplay}`);
           
-          // Create a new shift object with updated properties
-          return {
+          // Create an updated shift object
+          const updatedShift = {
             ...shift,
             start: event.start,
             end: event.end,
             group: event.group || shift.group,
-            content: `${shift.name} | ${timeDisplay}`
+            content: `${shift.name} | ${timeDisplay}`,
+            className: status === SHIFT_STATUS.AVAILABLE ? 'shift-item available-shift' : 'shift-item',
+            
+            // For Firestore
+            startTimeISO: event.start,
+            endTimeISO: event.end,
+            startTimeFormatted: formatTimeDisplay(startTime),
+            endTimeFormatted: formatTimeDisplay(endTime),
+            groupName: getGroupNameById(event.group || shift.group),
+            updatedAt: new Date(),
           };
+          
+          // In the future, we would update Firebase here:
+          // updateShiftInFirebase(updatedShift);
+          
+          return updatedShift;
         }
         return shift;
       });
     });
   };
 
+  // ========== Form Input Handlers ==========
+  
   // Handle changes to shift name input for new shift
   const handleNameChange = (e) => {
+    const newName = e.target.value;
     setNewShiftData(prev => ({
       ...prev,
-      name: e.target.value
+      name: newName,
+      status: isShiftAvailable(newName) ? SHIFT_STATUS.AVAILABLE : SHIFT_STATUS.ASSIGNED
     }));
   };
 
@@ -495,9 +660,11 @@ export default function GanttChartPage() {
   
   // Handle changes to shift name input for edit shift
   const handleEditNameChange = (e) => {
+    const newName = e.target.value;
     setEditShiftData(prev => ({
       ...prev,
-      name: e.target.value
+      name: newName,
+      status: isShiftAvailable(newName) ? SHIFT_STATUS.AVAILABLE : SHIFT_STATUS.ASSIGNED
     }));
   };
 
@@ -552,32 +719,9 @@ export default function GanttChartPage() {
       
       // Register our custom click handler for all clicks
       ref.on('click', handleTimelineClick);
-      
-      // Optionally log all events for debugging
-      const logAllEvents = (eventName) => {
-        ref.on(eventName, (props) => {
-          console.log(`EVENT ${eventName}:`, props);
-        });
-      };
-      
-      // Log these specific events to diagnose double click issues
-      logAllEvents('doubleClick');
-      logAllEvents('itemselect');
-      logAllEvents('itemover');
-      logAllEvents('itemout');
     }
   };
   
-  const formatDateHeader = (date) => {
-    const options = { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    };
-    return date.toLocaleDateString('en-US', options);
-  };
-
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">{formatDateHeader(today)}</h1>
@@ -736,6 +880,11 @@ export default function GanttChartPage() {
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
+        }
+        .available-shift {
+          background-color: #15803d; /* Green background */
+          border-color: #166534; /* Darker green border */
+          color: white;
         }
         .vis-item.vis-selected {
           border-color:rgb(49, 62, 147);

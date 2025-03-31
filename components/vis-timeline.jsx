@@ -20,7 +20,7 @@ const GanttTimeline = ({
 
   // Debug logging function with timestamps
   const logDebug = (title, data) => {
-    console.log(`⏰ ${new Date().toLocaleTimeString()} | 🔍 ${title}:`, data);
+    // console.log(`⏰ ${new Date().toLocaleTimeString()} | 🔍 ${title}:`, data);
   };
 
   // Create timeline on mount
