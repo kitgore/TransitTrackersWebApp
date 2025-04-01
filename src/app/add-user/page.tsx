@@ -83,7 +83,7 @@ export default function UsersPage() {
   };
 
   return (
-    <AppSidebar breadcrumb="User Management">
+    <AppSidebar>
     <div className="p-3">
     <Button
           variant="ghost"
