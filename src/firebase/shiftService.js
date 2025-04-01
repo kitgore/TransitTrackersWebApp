@@ -148,7 +148,8 @@ export const fetchUsers = async () => {
     const snapshot = await getDocs(usersCollection);
     return snapshot.docs.map(doc => ({
       id: doc.id,
-      ...doc.data()
+      ...doc.data(),
+      displayName: `${doc.data().firstName} ${doc.data().lastName}`.trim() // Create displayName from firstName and lastName
     }));
   } catch (error) {
     console.error('Error fetching users:', error);

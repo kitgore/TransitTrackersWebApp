@@ -161,8 +161,38 @@ const today = todayRef.current;
   
   // Get role name by ID
   const getRoleNameById = (roleId) => {
+    console.log('🔍 Looking up role name for ID:', roleId);
+    console.log('Available roles:', roles);
     const role = roles.find(r => r.id === roleId);
+    console.log('Found role:', role);
     return role ? role.content : roleId;
+  };
+
+  // Get role name for display
+  const getRoleDisplayName = (shift) => {
+    console.log('📋 Getting role display name for shift:', shift);
+    if (!shift) {
+      console.log('❌ No shift provided');
+      return '';
+    }
+    // First try to use the roleName from the shift data
+    if (shift.roleName) {
+      console.log('✅ Using shift.roleName:', shift.roleName);
+      return shift.roleName;
+    }
+    // Fallback to looking up the role name
+    console.log('🔄 Falling back to role lookup for role:', shift.role);
+    return getRoleNameById(shift.role);
+  };
+
+  // Format time for dialog title
+  const formatTimeForTitle = (date) => {
+    if (!date) return '';
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
+    const ampm = hours >= 12 ? 'pm' : 'am';
+    const formattedHours = hours % 12 || 12;
+    return `${formattedHours}:${minutes.toString().padStart(2, '0')} ${ampm}`;
   };
 
   // ========== Firebase Integration Functions ==========
@@ -252,7 +282,9 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
   useEffect(() => {
     const loadUsers = async () => {
       try {
+        console.log('Loading users from Firebase...');
         const fetchedUsers = await fetchUsers();
+        console.log('Fetched users:', fetchedUsers);
         setUsers(fetchedUsers);
       } catch (error) {
         console.error('Error loading users:', error);
@@ -266,12 +298,16 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
   useEffect(() => {
     const loadRoles = async () => {
       try {
+        console.log('Loading roles from Firebase...');
         const fetchedRoles = await fetchRoles();
+        console.log('Fetched roles:', fetchedRoles);
         if (fetchedRoles.length > 0) {
-          setRoles(fetchedRoles.map(role => ({
+          const formattedRoles = fetchedRoles.map(role => ({
             id: role.id,
             content: role.name
-          })));
+          }));
+          console.log('Formatted roles:', formattedRoles);
+          setRoles(formattedRoles);
         }
       } catch (error) {
         console.error('Error loading roles:', error);
@@ -291,7 +327,11 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
     role, 
     userId = null,
   }) => {
-    const timeDisplay = `${formatTimeDisplay(startTime)}-${formatTimeDisplay(endTime)}`;
+    // Ensure we have proper Date objects
+    const start = startTime instanceof Date ? startTime : new Date(startTime);
+    const end = endTime instanceof Date ? endTime : new Date(endTime);
+    
+    const timeDisplay = `${formatTimeDisplay(start)}-${formatTimeDisplay(end)}`;
     const status = isShiftAvailable(name) ? SHIFT_STATUS.AVAILABLE : SHIFT_STATUS.ASSIGNED;
     const dateISO = formatDate(today, DATE_FORMATS.ISO);
     
@@ -299,8 +339,8 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
       // Don't set an id field - Firebase will generate this
       group: role,
       content: `${name} | ${timeDisplay}`,
-      start: formatDateForTimeline(startTime),
-      end: formatDateForTimeline(endTime),
+      start: start.toISOString(), // Ensure ISO string format
+      end: end.toISOString(), // Ensure ISO string format
       className: status === SHIFT_STATUS.AVAILABLE ? 'shift-item available-shift' : 'shift-item',
       name,
       status,
@@ -309,10 +349,10 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
       // For Firestore
       role,
       date: dateISO,
-      startTimeISO: formatDateForTimeline(startTime),
-      endTimeISO: formatDateForTimeline(endTime),
-      startTimeFormatted: formatTimeDisplay(startTime),
-      endTimeFormatted: formatTimeDisplay(endTime),
+      startTimeISO: start.toISOString(),
+      endTimeISO: end.toISOString(),
+      startTimeFormatted: formatTimeDisplay(start),
+      endTimeFormatted: formatTimeDisplay(end),
       roleName: getRoleNameById(role),
       
       // Timestamps will be added in Firebase service
@@ -343,6 +383,14 @@ useEffect(() => {
         
         // Format the shifts for the timeline
         const formattedShifts = firebaseShifts.map(shift => {
+          console.log('📊 Processing shift from Firebase:', {
+            id: shift.id,
+            startTimeISO: shift.startTimeISO,
+            endTimeISO: shift.endTimeISO,
+            startTimeISOType: typeof shift.startTimeISO,
+            endTimeISOType: typeof shift.endTimeISO
+          });
+          
           // Check if the role exists
           const roleExists = roles.some(r => r.id === shift.role);
           if (!roleExists) {
@@ -351,20 +399,52 @@ useEffect(() => {
           }
           
           try {
+            // Convert Firestore Timestamp to Date if needed
+            let startDate, endDate;
+            
+            if (shift.startTimeISO && typeof shift.startTimeISO === 'object' && 'seconds' in shift.startTimeISO) {
+              // This is a Firestore Timestamp
+              startDate = new Date(shift.startTimeISO.seconds * 1000);
+            } else {
+              startDate = new Date(shift.startTimeISO);
+            }
+            
+            if (shift.endTimeISO && typeof shift.endTimeISO === 'object' && 'seconds' in shift.endTimeISO) {
+              // This is a Firestore Timestamp
+              endDate = new Date(shift.endTimeISO.seconds * 1000);
+            } else {
+              endDate = new Date(shift.endTimeISO);
+            }
+            
+            if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+              console.error('Invalid dates in shift:', shift);
+              return null;
+            }
+            
             // Create a timeline item using Firebase's document ID as the primary ID
-            return {
+            const formattedShift = {
               ...shift,
               // Essential timeline properties
               id: shift.id, // This is the Firebase document ID
               group: shift.role, // Map role to group for vis-timeline
               content: `${shift.name} | ${shift.startTimeFormatted}-${shift.endTimeFormatted}`,
-              start: shift.startTimeISO,
-              end: shift.endTimeISO,
+              start: startDate.toISOString(),
+              end: endDate.toISOString(),
               className: shift.status === SHIFT_STATUS.AVAILABLE ? 'shift-item available-shift' : 'shift-item',
               
               // Make sure we always have a date
               date: shift.date || dateISO,
             };
+            
+            console.log('✅ Formatted shift:', {
+              id: formattedShift.id,
+              start: formattedShift.start,
+              end: formattedShift.end,
+              startType: typeof formattedShift.start,
+              endType: typeof formattedShift.end
+            });
+            
+            return formattedShift;
           } catch (err) {
             console.error(`Error formatting shift ${shift.id}:`, err);
             return null;
@@ -533,17 +613,26 @@ const handleShiftEdit = (itemId) => {
         name = contentParts[0]?.trim() || SHIFT_STATUS.AVAILABLE;
       }
       
-      // Get role name for display
-      const roleName = getRoleNameById(datasetItem.group);
+      // Use the roleName from the full shift data
+      const roleName = fullShiftData.roleName || getRoleNameById(datasetItem.group);
+      
+      console.log('Setting edit shift data with:', {
+        id: itemId,
+        name,
+        role: datasetItem.group,
+        roleName,
+        startTime,
+        endTime
+      });
       
       // Set edit shift data using the timeline item data
       setEditShiftData({
-        id: itemId, // Use the timeline item ID (which is now the Firebase ID)
+        id: itemId,
         name: name,
         startTime: startTime,
         endTime: endTime,
         role: datasetItem.group,
-        roleName: roleName,
+        roleName: roleName, // Use the roleName from fullShiftData
         formattedStartTime: formatTimeInput(startTime),
         formattedEndTime: formatTimeInput(endTime),
         status: isShiftAvailable(name) ? SHIFT_STATUS.AVAILABLE : SHIFT_STATUS.ASSIGNED,
@@ -874,7 +963,7 @@ const handleTimeChange = async (event) => {
       ...prev,
       userId: userId,
       name: userId 
-        ? selectedUser?.displayName || prev.name
+        ? `${selectedUser?.firstName} ${selectedUser?.lastName}`.trim()
         : SHIFT_STATUS.AVAILABLE,
       status: userId ? SHIFT_STATUS.ASSIGNED : SHIFT_STATUS.AVAILABLE
     }));
@@ -889,7 +978,7 @@ const handleTimeChange = async (event) => {
       ...prev,
       userId: userId,
       name: userId 
-        ? selectedUser?.displayName || prev.name
+        ? `${selectedUser?.firstName} ${selectedUser?.lastName}`.trim()
         : SHIFT_STATUS.AVAILABLE,
       status: userId ? SHIFT_STATUS.ASSIGNED : SHIFT_STATUS.AVAILABLE
     }));
@@ -911,6 +1000,14 @@ const handleTimeChange = async (event) => {
       
       // Register our custom click handler for all clicks
       ref.on('click', handleTimelineClick);
+      
+      // Also register a double-click handler as backup
+      ref.on('doubleClick', (event) => {
+        console.log('Double click event received:', event);
+        if (event.item) {
+          handleShiftEdit(event.item);
+        }
+      });
     }
   };
   
@@ -961,22 +1058,10 @@ const handleTimeChange = async (event) => {
                 <option value="">Available</option>
                 {users.map(user => (
                   <option key={user.id} value={user.id}>
-                    {user.displayName}
+                    {user.firstName} {user.lastName}
                   </option>
                 ))}
               </select>
-            </div>
-            
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="name" className="text-right">
-                Name
-              </Label>
-              <Input
-                id="name"
-                value={newShiftData.name}
-                onChange={handleNameChange}
-                className="col-span-3"
-              />
             </div>
             
             <div className="grid grid-cols-4 items-center gap-4">
@@ -1021,68 +1106,69 @@ const handleTimeChange = async (event) => {
           <DialogHeader>
             <DialogTitle>Edit Shift</DialogTitle>
             <DialogDescription>
-              Update shift details for {editShiftData.roleName}
+              {(() => {
+                console.log('🎯 Edit dialog shift data:', editShiftData);
+                if (!editShiftData.id) {
+                  console.log('❌ No valid shift data yet');
+                  return 'Loading shift details...';
+                }
+                return editShiftData.roleName && editShiftData.startTime && editShiftData.endTime
+                  ? `Update shift details for ${getRoleDisplayName(editShiftData)} at ${formatTimeForTitle(editShiftData.startTime)} to ${formatTimeForTitle(editShiftData.endTime)}`
+                  : 'Update shift details';
+              })()}
             </DialogDescription>
           </DialogHeader>
           
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="editUser" className="text-right">
-                Assign To
-              </Label>
-              <select
-                id="editUser"
-                value={editShiftData.userId || ''}
-                onChange={handleEditUserSelect}
-                className="col-span-3 p-2 border rounded"
-              >
-                <option value="">Available</option>
-                {users.map(user => (
-                  <option key={user.id} value={user.id}>
-                    {user.displayName}
-                  </option>
-                ))}
-              </select>
+          {editShiftData.id ? (
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="editUser" className="text-right">
+                  Assign To
+                </Label>
+                <select
+                  id="editUser"
+                  value={editShiftData.userId || ''}
+                  onChange={handleEditUserSelect}
+                  className="col-span-3 p-2 border rounded"
+                >
+                  <option value="">Available</option>
+                  {users.map(user => (
+                    <option key={user.id} value={user.id}>
+                      {user.firstName} {user.lastName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="editStartTime" className="text-right">
+                  Start Time
+                </Label>
+                <Input
+                  id="editStartTime"
+                  type="time"
+                  value={editShiftData.formattedStartTime}
+                  onChange={handleEditStartTimeChange}
+                  className="col-span-3"
+                />
+              </div>
+              
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="editEndTime" className="text-right">
+                  End Time
+                </Label>
+                <Input
+                  id="editEndTime"
+                  type="time"
+                  value={editShiftData.formattedEndTime}
+                  onChange={handleEditEndTimeChange}
+                  className="col-span-3"
+                />
+              </div>
             </div>
-            
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="editName" className="text-right">
-                Name
-              </Label>
-              <Input
-                id="editName"
-                value={editShiftData.name}
-                onChange={handleEditNameChange}
-                className="col-span-3"
-              />
-            </div>
-            
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="editStartTime" className="text-right">
-                Start Time
-              </Label>
-              <Input
-                id="editStartTime"
-                type="time"
-                value={editShiftData.formattedStartTime}
-                onChange={handleEditStartTimeChange}
-                className="col-span-3"
-              />
-            </div>
-            
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="editEndTime" className="text-right">
-                End Time
-              </Label>
-              <Input
-                id="editEndTime"
-                type="time"
-                value={editShiftData.formattedEndTime}
-                onChange={handleEditEndTimeChange}
-                className="col-span-3"
-              />
-            </div>
-          </div>
+          ) : (
+            <div className="py-4 text-center">Loading shift details...</div>
+          )}
           
           <DialogFooter className="flex justify-between">
             <Button variant="destructive" onClick={deleteShift}>
