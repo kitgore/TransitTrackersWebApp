@@ -251,16 +251,35 @@ const GanttTimeline = ({
   useEffect(() => {
     if (!timelineRef.current || !itemsDatasetRef.current) return;
     
-    logDebug('Items received for update', items);
+    console.log('🔄 Items received for update:', JSON.stringify(items, null, 2));
     
     try {
-      // Clear and add all items (since we're having issues with updates)
-      itemsDatasetRef.current.clear();
-      itemsDatasetRef.current.add(items);
+      // Validate items before adding
+      const validatedItems = items.map(item => {
+        console.log('🔍 Validating item:', {
+          id: item.id,
+          start: item.start,
+          end: item.end,
+          startType: typeof item.start,
+          endType: typeof item.end
+        });
+        
+        // Ensure dates are in correct format
+        return {
+          ...item,
+          start: item.start instanceof Date ? item.start.toISOString() : item.start,
+          end: item.end instanceof Date ? item.end.toISOString() : item.end
+        };
+      });
       
-      logDebug('Items after complete refresh', itemsDatasetRef.current.get());
+      // Clear and add all items
+      itemsDatasetRef.current.clear();
+      itemsDatasetRef.current.add(validatedItems);
+      
+      console.log('✅ Items after validation:', JSON.stringify(validatedItems, null, 2));
     } catch (error) {
-      console.error('Error updating items:', error);
+      console.error('❌ Error updating items:', error);
+      console.error('Problematic items:', JSON.stringify(items, null, 2));
     }
   }, [items]);
 
