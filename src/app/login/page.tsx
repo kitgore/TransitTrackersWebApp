@@ -2,41 +2,27 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { 
-	signInWithEmailAndPassword,
-	createUserWithEmailAndPassword,
-} from 'firebase/auth';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/src/firebase/config';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
 export default function LoginPage() {
-    // State hooks for form management
-    // useState returns [current state, function to update state]
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
-    const [isSignUp, setIsSignUp] = useState(false); // Toggle between login and signup
     const [isLoading, setIsLoading] = useState(false);
     
-    // Next.js router hook for programmatic navigation
     const router = useRouter();
 
-    // Form submission handler
     const handleAuth = async (e: React.FormEvent) => {
-        e.preventDefault(); // Prevent default form submission
+        e.preventDefault();
         setIsLoading(true);
         setError('');
         
         try {
-            // Attempt either signup or login based on isSignUp state
-            if (isSignUp) {
-                await createUserWithEmailAndPassword(auth, email, password);
-            } else {
-                await signInWithEmailAndPassword(auth, email, password);
-            }
-            // Navigate to dashboard after successful authentication
+            await signInWithEmailAndPassword(auth, email, password);
             router.push('/dashboard');
         } catch (error: any) {
             setError(error.message);
@@ -50,9 +36,7 @@ export default function LoginPage() {
 			<Card className="w-full max-w-md">
 				<CardHeader>
 					<CardTitle className="text-2xl text-center">
-						{isSignUp
-							? 'Create an account'
-							: 'Sign in to your account'}
+						Sign in to your account
 					</CardTitle>
 				</CardHeader>
 				<CardContent>
@@ -81,11 +65,7 @@ export default function LoginPage() {
 									id="password"
 									type="password"
 									placeholder="Password"
-									autoComplete={
-										isSignUp
-											? 'new-password'
-											: 'current-password'
-									}
+									autoComplete="current-password"
 									required
 									value={password}
 									onChange={(e) =>
@@ -100,22 +80,7 @@ export default function LoginPage() {
 							className="w-full"
 							disabled={isLoading}
 						>
-							{isLoading
-								? 'Processing...'
-								: isSignUp
-									? 'Create Account'
-									: 'Sign In'}
-						</Button>
-
-						<Button
-							type="button"
-							variant="ghost"
-							className="w-full"
-							onClick={() => setIsSignUp(!isSignUp)}
-						>
-							{isSignUp
-								? 'Already have an account? Sign in'
-								: "Don't have an account? Sign up"}
+							{isLoading ? 'Processing...' : 'Sign In'}
 						</Button>
 					</form>
 				</CardContent>

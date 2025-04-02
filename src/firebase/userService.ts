@@ -9,6 +9,7 @@ interface NewUserData {
   firstName: string;
   lastName: string;
   phoneNumber: string;
+  role: string; // Added role field
 }
 
 export const userService = {
@@ -27,8 +28,8 @@ export const userService = {
         lastName: userData.lastName,
         phoneNumber: userData.phoneNumber,
         email: userData.email,
+        role: userData.role, // Ensure role is stored in Firestore
         createdAt: new Date().toISOString(),
-        // Don't store the password in Firestore
       });
 
       return userCredential.user;
