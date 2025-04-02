@@ -11,6 +11,7 @@ import { Checkbox } from '@radix-ui/react-checkbox';
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { useAuth } from "@/context/AuthContext";  
+import { useRouter } from 'next/navigation';
 
 interface Vehicle {
     id: string;
@@ -22,7 +23,9 @@ interface Vehicle {
 }
 
 export default function AdminPage() {
-    const { user, loading } = useAuth();
+    const { user, loading, role } = useAuth();
+    const router = useRouter();
+
     const [vehicles, setVehicles] = useState<Vehicle[]>([]);
     const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
     const [status, setStatus] = useState<string>("");
@@ -56,6 +59,18 @@ export default function AdminPage() {
             fetchVehicles();
         }
     }, [loading, user]);
+
+    if (loading) {
+        return <div>Loading...</div>;
+    }
+
+    if (!user) {
+        return <div>You must be logged in to access this page.</div>;
+    }
+
+    if (role !== "admin") {
+        return <div className="text-center text-red-500 font-bold text-lg mt-10">Access Denied: You do not have admin privileges.</div>;
+    }
 
     // Add vehicle to Firestore
     const handleAddVehicle = async () => {
@@ -177,7 +192,7 @@ export default function AdminPage() {
                     <div className="w-1/2 rounded-md border">
                         <div className="flex bg-gray-100 font-bold p-3 px-12 border-b">Vehicle List</div>
 
-                        <ScrollArea className="h-[450px] w-full">
+                        <ScrollArea className="h-[500px] w-full">
                             <div className="space-y-0">
                                 {vehicles.map((vehicle) => (
                                     <div key={vehicle.id} className="flex items-center p-3 border-b last:border-b-0">

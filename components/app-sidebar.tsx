@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
-import { auth } from '@/src/firebase/config';
+import { auth, db } from '@/src/firebase/config';
+import { doc, getDoc } from "firebase/firestore";
 import { NavUser } from "@/components/nav-user";
-import { DatePicker } from "@/components/date-picker";
 import { NavItems } from "@/components/nav-items";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -14,12 +14,6 @@ import {
   BookUser,
   MessageSquare
 } from "lucide-react";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbList,
-  BreadcrumbPage,
-} from "@/components/ui/breadcrumb";
 import {
   Sidebar,
   SidebarContent,
@@ -30,15 +24,13 @@ import {
   SidebarSeparator,
   SidebarInset,
   SidebarProvider,
-  SidebarTrigger,
 } from "@/components/ui/sidebar";
 
 interface SidebarProps {
   children: React.ReactNode;
-  breadcrumb?: string;
 }
 
-const navigationItems = [
+const allNavigationItems = [
   {
     name: "Schedule",
     url: "/dashboard",
@@ -58,21 +50,30 @@ const navigationItems = [
     name: "Administrator Panel",
     url: "/admin",
     icon: Shield,
+    requiresAdmin: true,
   },
 ];
 
-export function AppSidebar({ children }: Omit<SidebarProps, 'breadcrumb'>) {
+export function AppSidebar({ children }: SidebarProps) {
   const [user, setUser] = useState<User | null>(null);
+  const [role, setRole] = useState<string | null>(null);
   const router = useRouter();
-  
+
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setUser(user);
+
+        // Fetch user role from Firestore
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (userDoc.exists()) {
+          setRole(userDoc.data().role || "driver"); // Default to 'driver' if role is missing
+        }
       } else {
         router.push('/login');
       }
     });
+
     return () => unsubscribe();
   }, [router]);
 
@@ -80,10 +81,15 @@ export function AppSidebar({ children }: Omit<SidebarProps, 'breadcrumb'>) {
     return null;
   }
 
+  // Filter navigation items based on role
+  const filteredNavigationItems = allNavigationItems.filter(
+    (item) => !item.requiresAdmin || role === "admin"
+  );
+
   const userData = {
-    name: user?.displayName || 'User',
-    email: user?.email || '',
-    avatar: user?.photoURL || '/avatars/default.jpg',
+    name: user.displayName || 'User',
+    email: user.email || '',
+    avatar: user.photoURL || '/avatars/default.jpg',
   };
 
   return (
@@ -93,13 +99,10 @@ export function AppSidebar({ children }: Omit<SidebarProps, 'breadcrumb'>) {
           <NavUser user={userData} />
         </SidebarHeader>
         <SidebarContent>
-          {/* <DatePicker /> */}
           <SidebarSeparator className="mx-0" />
-          <NavItems items={navigationItems} />
+          <NavItems items={filteredNavigationItems} />
         </SidebarContent>
-        <SidebarFooter>
-          {/* Footer content if needed */}
-        </SidebarFooter>
+        <SidebarFooter></SidebarFooter>
         <SidebarRail />
       </Sidebar>
       <SidebarInset>
