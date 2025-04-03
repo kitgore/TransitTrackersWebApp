@@ -12,7 +12,8 @@ import {
   Shield,
   Calendar,
   BookUser,
-  MessageSquare
+  MessageSquare,
+  ClipboardList
 } from "lucide-react";
 import {
   Sidebar,
@@ -52,6 +53,12 @@ const allNavigationItems = [
     icon: Shield,
     requiresAdmin: true,
   },
+  {
+    name: "Role Management",
+    url: "/roles",
+    icon: ClipboardList,
+    requiresAdmin: true,
+  }
 ];
 
 export function AppSidebar({ children }: SidebarProps) {
