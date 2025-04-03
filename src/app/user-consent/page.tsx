@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { AppSidebar } from '@/components/app-sidebar';
 import { ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
@@ -47,12 +46,10 @@ export default function CommunicationConsentPage() {
         throw new Error('Please select at least one communication method.');
       }
 
-      // Record the consent with timestamp and user IP
+      // Record the consent with timestamp
       const consentRecord = {
         ...formData,
         timestamp: getConsentTimestamp(),
-        // You would typically get this from your server
-        ipAddress: "127.0.0.1", 
         termsVersion: "v1.0"
       };
       
@@ -90,16 +87,18 @@ export default function CommunicationConsentPage() {
   };
 
   return (
-    <AppSidebar>
-      <div className="p-3">
-        <Button
-          variant="ghost"
-          onClick={() => router.back()}
-          className="flex items-center"
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
-        </Button>
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto p-6">
+        <div className="mb-6">
+          <Button
+            variant="ghost"
+            onClick={() => router.push('/')}
+            className="flex items-center"
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Home
+          </Button>
+        </div>
 
         <div className="max-w-xl mx-auto space-y-6">
           <Card>
@@ -214,6 +213,6 @@ export default function CommunicationConsentPage() {
           </Card>
         </div>
       </div>
-    </AppSidebar>
+    </div>
   );
 }
