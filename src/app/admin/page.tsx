@@ -1,5 +1,5 @@
 'use client'; 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { collection, getDocs, doc, updateDoc, addDoc, deleteDoc } from "firebase/firestore";
 import { db } from '@/src/firebase/config';
 import { AppSidebar } from "@/components/app-sidebar";
@@ -39,7 +39,7 @@ export default function AdminPage() {
     const [vehicleToRemove, setVehicleToRemove] = useState<Vehicle | null>(null);
     const [plateInput, setPlateInput] = useState<string>("");
 
-    const fetchVehicles = async () => {
+    const fetchVehicles = useCallback(async () => {
         if (!user) return;
 
         const querySnapshot = await getDocs(collection(db, "vehicles"));
@@ -52,13 +52,13 @@ export default function AdminPage() {
             note: doc.data().note || ""
         }));
         setVehicles(vehicleList);
-    };
+    }, [user]);
 
     useEffect(() => {
         if (!loading && user) {
             fetchVehicles();
         }
-    }, [loading, user]);
+    }, [loading, user, fetchVehicles]);
 
     if (loading) {
         return <div>Loading...</div>;

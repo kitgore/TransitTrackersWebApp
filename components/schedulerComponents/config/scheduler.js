@@ -1,6 +1,6 @@
 import { SummaryPos, ViewType } from './default';
 
-export default {
+const config = {
   schedulerWidth: '100%',
   besidesWidth: 20,
   schedulerMaxHeight: 0,
@@ -94,3 +94,5 @@ export default {
     { viewName: 'Year', viewType: ViewType.Year, showAgenda: false, isEventPerspective: false },
   ],
 };
+
+export default config;
