@@ -40,11 +40,13 @@ const allNavigationItems = [
     name: "Driver Messaging",
     url: "/messaging",
     icon: MessageSquare,
+    requiresAdmin: true,
   },
   {
     name: "Manage Drivers",
     url: "/users",
     icon: BookUser,
+    requiresAdmin: true,
   },
   {
     name: "Administrator Panel",

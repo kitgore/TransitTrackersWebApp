@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Menu, Search, Settings } from "lucide-react"; 
 import { AppSidebar } from "@/components/app-sidebar";
+import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
 
 // Example message type
 interface Message {
@@ -22,6 +24,9 @@ interface Message {
 
 // This page displays a full-page chat layout
 export default function ChatPage() {
+  const { user, loading: authLoading, role } = useAuth();
+  const router = useRouter();
+
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
@@ -56,6 +61,19 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, newMessage]);
     setInputValue("");
   };
+
+  // Redirect non-admin users
+  if (authLoading) {
+    return <div>Loading...</div>;
+  }
+
+  if (!user) {
+    return <div>You must be logged in to access this page.</div>;
+  }
+
+  if (role !== "admin") {
+    return <div className="text-center text-red-500 font-bold text-lg mt-10">Access Denied: You do not have admin privileges.</div>;
+  }
 
   return (
     <AppSidebar>
