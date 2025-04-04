@@ -7,6 +7,7 @@ import { auth } from '@/src/firebase/config';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { getAuth, sendPasswordResetEmail } from "firebase/auth";
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
@@ -31,6 +32,20 @@ export default function LoginPage() {
         }
     };
 
+	const handleResetPassword = async () => {
+		const email = prompt("Enter your email to receive a password reset link:");
+		if (email) {
+			const auth = getAuth();
+			try {
+				await sendPasswordResetEmail(auth, email);
+				alert("Password reset email sent! Check your inbox.");
+			} catch (error: any) {
+				console.error(error.message);
+				alert(error.message);
+			}
+		}
+	};
+	  
 	return (
 		<div className="min-h-screen flex items-center justify-center bg-background p-4">
 			<Card className="w-full max-w-md">
@@ -83,6 +98,11 @@ export default function LoginPage() {
 							{isLoading ? 'Processing...' : 'Sign In'}
 						</Button>
 					</form>
+					<div className="flex justify-center items-center mt-5 p-2">
+						<a href="#" onClick={handleResetPassword}>
+							Forgot Password?
+						</a>
+					</div>
 				</CardContent>
 			</Card>
 		</div>
