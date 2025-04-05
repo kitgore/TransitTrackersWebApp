@@ -7,9 +7,11 @@ import GanttChartPage from '@/components/schedule'; // Assuming you have a Sched
 export default function DashboardPage() {
   return (
     <AppSidebar>
-      <div className="container mx-auto p-4">
+      <div className="container mx-auto p-4 flex flex-col h-screen">
         <h1 className="text-xl font-bold mb-4">Dashboard</h1>
-        <GanttChartPage />
+        <div className="flex-grow h-[80vh]">
+          <GanttChartPage />
+        </div>
       </div>
     </AppSidebar>
   );

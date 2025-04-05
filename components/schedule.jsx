@@ -480,7 +480,7 @@ useEffect(() => {
     selectable: true,
     margin: {
       item: {
-        horizontal: 10
+        horizontal: 0,
       }
     },
     // Set showMajorLabels to false to hide the date headers
@@ -495,7 +495,10 @@ useEffect(() => {
         hour: 'ha', // Format hour labels as "8am", "9am", etc.
         minute: 'h:mma'
       }
-    }
+    },
+    // Set row heights to match current filled row height
+    groupHeightMode: 'fixed',
+    // groupHeight: 180
   });
 
   // ========== Event Handlers ==========
@@ -1016,23 +1019,17 @@ const handleTimeChange = async (event) => {
       <h1 className="text-2xl font-bold mb-4">{formatDateHeader(today)}</h1>
       
       {roles.length > 0 && ( // Only render when roles are available
-        <div className="border rounded-lg overflow-hidden">
+        <div className="border rounded-lg overflow-hidden h-[80vh]">
           <GanttTimeline
             items={shifts}
             groups={roles}
             options={options}
-            className="h-[600px]"
+            className="h-full"
             onTimeChange={handleTimeChange}
             getTimelineRef={(ref, itemsDs, groupsDs) => getTimelineRef(ref, itemsDs, groupsDs)}
           />
         </div>
       )}
-        
-      <div className="mt-4 space-y-2">
-        <p className="text-sm text-blue-500">
-          Current shift count: {shifts.length}
-        </p>
-      </div>
       
       {/* Create Shift Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>

@@ -323,7 +323,7 @@ const GanttTimeline = ({
     <div 
       ref={containerRef} 
       className={`gantt-timeline-container ${className}`} 
-      style={{ width: '100%', height: '500px' }}
+      style={{ width: '100%', height: '100%' }}
     />
   );
 };
