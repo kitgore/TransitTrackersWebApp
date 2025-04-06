@@ -9,9 +9,11 @@ import { UserTable, type User } from "@/components/user-table";
 import { Button } from "@/components/ui/button";
 import { PlusCircle } from "lucide-react";
 import { useRouter } from 'next/navigation';
+import { useAuth } from "@/context/AuthContext";
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
+  const { user, loading: authLoading, role } = useAuth();
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
@@ -34,6 +36,19 @@ export default function UsersPage() {
       setLoading(false);
     }
   };
+
+  // Redirect non-admin users
+  if (authLoading) {
+    return <div>Loading...</div>;
+  }
+
+  if (!user) {
+    return <div>You must be logged in to access this page.</div>;
+  }
+
+  if (role !== "admin") {
+    return <div className="text-center text-red-500 font-bold text-lg mt-10">Access Denied: You do not have admin privileges.</div>;
+  }
 
   return (
     <AppSidebar breadcrumb="Manage Drivers">

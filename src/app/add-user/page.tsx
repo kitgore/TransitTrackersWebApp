@@ -9,6 +9,8 @@ import { useToast } from "@/hooks/use-toast";
 import { AppSidebar } from '@/components/app-sidebar';
 import { ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
+
 import {
   Card,
   CardContent,
@@ -27,6 +29,7 @@ interface NewUser {
 }
 
 export default function UsersPage() {
+  const { user, loading: authLoading, role } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -38,6 +41,18 @@ export default function UsersPage() {
     phoneNumber: '',
     role: 'driver', // Default role is "driver"
   });
+
+  if (authLoading) {
+    return <div>Loading...</div>;
+  } 
+
+  if (!user) {
+    return <div>You must be logged in to access this page.</div>;
+  }
+
+  if (role !== "admin") {
+      return <div className="text-center text-red-500 font-bold text-lg mt-10">Access Denied: You do not have admin privileges.</div>;
+  }
 
   const validatePassword = (password: string) => {
     if (password.length < 6) {
