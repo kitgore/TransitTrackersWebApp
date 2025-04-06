@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '@/src/firebase/config';
+import { auth, db } from '@/src/firebase/config';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -23,8 +23,23 @@ export default function LoginPage() {
         setError('');
         
         try {
-            await signInWithEmailAndPassword(auth, email, password);
-            router.push('/dashboard');
+            const userCredential = await signInWithEmailAndPassword(auth, email, password);
+            
+            // Get the user document from Firestore to check their role
+            const userDoc = await getDoc(doc(db, "users", userCredential.user.uid));
+            
+            if (userDoc.exists()) {
+                const userRole = userDoc.data().role || "driver";
+                // Redirect based on role
+                if (userRole === "admin") {
+                    router.push('/dashboard-admin');
+                } else {
+                    router.push('/dashboard');
+                }
+            } else {
+                // Default to regular dashboard if role can't be determined
+                router.push('/dashboard');
+            }
         } catch (error: any) {
             setError(error.message);
         } finally {
