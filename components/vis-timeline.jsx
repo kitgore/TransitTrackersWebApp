@@ -26,6 +26,16 @@ const GanttTimeline = ({
   // Create timeline on mount
   useEffect(() => {
     if (!containerRef.current) return;
+
+  // Log dimensions
+  console.log("Container dimensions", containerRef.current.offsetWidth, containerRef.current.offsetHeight);
+
+  if (containerRef.current.offsetWidth === 0 || containerRef.current.offsetHeight === 0) {
+    console.log("Container is still 0px, skipping Timeline creation");
+    return;
+  }
+
+    console.log("MOUNT CALLED");
     
     logDebug('Creating timeline with container', containerRef.current);
     
@@ -43,8 +53,6 @@ const GanttTimeline = ({
         remove: true
       },
       timeAxis: { scale: 'hour', step: 1 },
-      zoomMin: 1000 * 60 * 60,
-      zoomMax: 1000 * 60 * 60 * 24 * 31,
       showCurrentTime: true,
       format: {
         minorLabels: {
@@ -61,7 +69,9 @@ const GanttTimeline = ({
       stack: true,
       groupEditable: true,
       horizontalScroll: true,
-      zoomable: false
+      verticalScroll: true,
+      zoomable: false,
+      moveable: false,
     };
     
     const mergedOptions = { ...defaultOptions, ...options };
@@ -204,6 +214,13 @@ const GanttTimeline = ({
     } catch (error) {
       console.error('Error initializing timeline:', error);
     }
+
+    setTimeout(() => {
+      if (timelineRef.current) {
+        timelineRef.current.redraw();
+        console.log("Timeline redraw triggered");
+      }
+    }, 100);
     
     return () => {
       if (timelineRef.current) {
@@ -323,7 +340,7 @@ const GanttTimeline = ({
     <div 
       ref={containerRef} 
       className={`gantt-timeline-container ${className}`} 
-      style={{ width: '100%', height: '100%' }}
+      style={{ height: '100%', width: '100%' }}
     />
   );
 };
