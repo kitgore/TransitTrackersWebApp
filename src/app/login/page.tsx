@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { getAuth, sendPasswordResetEmail } from "firebase/auth";
 import { useAuth } from "@/context/AuthContext";  
+import { signOut } from 'firebase/auth';
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
@@ -17,6 +18,8 @@ export default function LoginPage() {
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [redirected, setRedirected] = useState(false); // prevent multiple redirects
+
+    const [isLoggedIn, setIsLoggedIn] = useState(false); // Track login state
 
     const { user, role, loading } = useAuth(); // <- now watching loading too
     const router = useRouter();
@@ -29,6 +32,7 @@ export default function LoginPage() {
         try {
             await signInWithEmailAndPassword(auth, email, password);
             // Now wait for role to load in useEffect
+            setIsLoggedIn(true);
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -38,7 +42,8 @@ export default function LoginPage() {
 
     // ✅ Wait for context to populate, then redirect
     useEffect(() => {
-        if (!loading && user && role && !redirected) {
+        // Wait until user has logged in and role is available
+        if (isLoggedIn && !loading && user && role && !redirected) {
             if (role === 'admin') {
                 router.push('/dashboard-admin');
             } else {
@@ -46,7 +51,8 @@ export default function LoginPage() {
             }
             setRedirected(true);
         }
-    }, [loading, user, role, router, redirected]);
+    }, [loading, user, role, router, redirected, isLoggedIn]);
+
 
     const handleResetPassword = async () => {
         const emailPrompt = prompt('Enter your email to receive a password reset link:');
