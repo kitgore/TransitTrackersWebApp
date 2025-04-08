@@ -43,6 +43,7 @@ const DATE_FORMATS = {
 export default function ShiftScheduler() {
   // Reference to timeline for event handling
   const timelineRef = useRef(null);
+  const containerRef = useRef(null);
   
   // Reference to the timeline's internal datasets
   const itemsDatasetRef = useRef(null);
@@ -50,7 +51,7 @@ export default function ShiftScheduler() {
   
   // Get today's date for creating the sample data
   const todayRef = useRef(new Date());
-const today = todayRef.current;
+  const today = todayRef.current;
   
   // Track click information
   const lastClickRef = useRef({
@@ -460,9 +461,12 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
       // Timestamps will be added in Firebase service
     };
   };
+
   
 // Initialize shifts with consistent date format after component mounts
 useEffect(() => {
+
+  console.log("USE EFFECT CALLED");
   let lastFetchTime = 0;
   
   const loadShifts = async () => {
@@ -473,7 +477,7 @@ useEffect(() => {
       return;
     }
     lastFetchTime = now;
-    
+
     try {
       const dateISO = formatDate(today, DATE_FORMATS.ISO);
       console.log(`Fetching shifts for date: ${dateISO}`);
@@ -573,11 +577,15 @@ useEffect(() => {
   if (roles.length > 0) {
     loadShifts();
   }
+ 
 }, [fetchShiftsFromFirebase, roles, today]);
-  // Timeline options with fixed window
+  
+// Timeline options with fixed window
   const [options] = useState({
-    min: new Date(new Date(today).setHours(8, 0, 0, 0)),
-    max: new Date(new Date(today).setHours(18, 0, 0, 0)),
+    min: new Date(new Date(today).setHours(5, 0, 0, 0)),  // scrollable lower bound
+    max: new Date(new Date(today).setHours(24, 0, 0, 0)), // scrollable upper bound
+    //start: new Date(new Date(today).setHours(8, 0, 0, 0)), // initial view start
+    //end: new Date(new Date(today).setHours(17, 0, 0, 0)),  // initial view end
     editable: true,
     selectable: true,
     margin: {
