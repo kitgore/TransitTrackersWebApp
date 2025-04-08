@@ -50,8 +50,7 @@ export default function ShiftScheduler() {
   const rolesDatasetRef = useRef(null);
   
   // Get today's date for creating the sample data
-  const todayRef = useRef(new Date());
-  const today = todayRef.current;
+  const [currentDate, setCurrentDate] = useState(() => new Date());
   
   // Track click information
   const lastClickRef = useRef({
@@ -124,7 +123,7 @@ export default function ShiftScheduler() {
   
   // Create a date at a specific hour
   const createDateAtHour = (hour, minutes = 0) => {
-    const date = new Date(today);
+    const date = new Date(currentDate);
     date.setHours(hour, minutes, 0, 0);
     return formatDateForTimeline(date);
   };
@@ -214,11 +213,19 @@ export default function ShiftScheduler() {
     return `${formattedHours}:${minutes.toString().padStart(2, '0')} ${ampm}`;
   };
 
+  // update the date when currentDate changes
+  useEffect(() => {
+    if (!timelineRef.current) return;
+    const min = new Date(new Date(currentDate).setHours(5, 0, 0, 0));
+    const max = new Date(new Date(currentDate).setHours(24, 0, 0, 0));
+    timelineRef.current.setWindow(min, max, { animation: false });
+  }, [currentDate]);
+
   // ========== Firebase Integration Functions ==========
   
   // Fetch shifts from Firebase
   const fetchShiftsFromFirebase = useCallback(async () => {
-    const dateISO = formatDate(today, DATE_FORMATS.ISO);
+    const dateISO = formatDate(currentDate, DATE_FORMATS.ISO);
     try {
       console.log(`Fetching shifts for date: ${dateISO}`);
       const shifts = await fetchShiftsByDate(dateISO);
@@ -235,7 +242,7 @@ export default function ShiftScheduler() {
       console.error(`Error fetching shifts: ${error.message}`);
       return [];
     }
-  }, [today]);
+  }, [currentDate]);
 
   // Save shift to Firebase
   const saveShiftToFirebase = useCallback(async (shift) => {
@@ -431,7 +438,7 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
     
     const timeDisplay = `${formatTimeDisplay(start)}-${formatTimeDisplay(end)}`;
     const status = isShiftAvailable(name) ? SHIFT_STATUS.AVAILABLE : SHIFT_STATUS.ASSIGNED;
-    const dateISO = formatDate(today, DATE_FORMATS.ISO);
+    const dateISO = formatDate(currentDate, DATE_FORMATS.ISO);
     
     // Get role name - roles should be loaded at this point
     const roleName = getRoleNameById(role);
@@ -479,7 +486,7 @@ useEffect(() => {
     lastFetchTime = now;
 
     try {
-      const dateISO = formatDate(today, DATE_FORMATS.ISO);
+      const dateISO = formatDate(currentDate, DATE_FORMATS.ISO);
       console.log(`Fetching shifts for date: ${dateISO}`);
       
       const firebaseShifts = await fetchShiftsFromFirebase();
@@ -578,14 +585,14 @@ useEffect(() => {
     loadShifts();
   }
  
-}, [fetchShiftsFromFirebase, roles, today]);
+}, [fetchShiftsFromFirebase, roles, currentDate]);
   
 // Timeline options with fixed window
   const [options] = useState({
-    min: new Date(new Date(today).setHours(5, 0, 0, 0)),  // scrollable lower bound
-    max: new Date(new Date(today).setHours(24, 0, 0, 0)), // scrollable upper bound
-    //start: new Date(new Date(today).setHours(8, 0, 0, 0)), // initial view start
-    //end: new Date(new Date(today).setHours(17, 0, 0, 0)),  // initial view end
+    min: new Date(new Date(currentDate).setHours(5, 0, 0, 0)),  // scrollable lower bound
+    max: new Date(new Date(currentDate).setHours(24, 0, 0, 0)), // scrollable upper bound
+    //start: new Date(new Date(currentDate).setHours(8, 0, 0, 0)), // initial view start
+    //end: new Date(new Date(currentDate).setHours(17, 0, 0, 0)),  // initial view end
     editable: true,
     selectable: true,
     margin: {
@@ -717,7 +724,7 @@ const handleShiftEdit = (itemId) => {
         // Create a minimal version based on the timeline item data
         fullShiftData = {
           id: itemId,
-          date: formatDate(today, DATE_FORMATS.ISO),
+          date: formatDate(currentDate, DATE_FORMATS.ISO),
           ...datasetItem
         };
         
@@ -759,7 +766,7 @@ const handleShiftEdit = (itemId) => {
         formattedEndTime: formatTimeInput(endTime),
         status: isShiftAvailable(name) ? SHIFT_STATUS.AVAILABLE : SHIFT_STATUS.ASSIGNED,
         userId: fullShiftData.userId || null,
-        date: fullShiftData.date || formatDate(today, DATE_FORMATS.ISO),
+        date: fullShiftData.date || formatDate(currentDate, DATE_FORMATS.ISO),
         createdAt: fullShiftData.createdAt || new Date(),
         updatedAt: fullShiftData.updatedAt || new Date(),
         vehicleId: fullShiftData.vehicleId || null,
@@ -1170,7 +1177,16 @@ const handleTimeChange = async (event) => {
   
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">{formatDateHeader(today)}</h1>
+
+      <div className="flex justify-between items-center mb-2">
+        <Button onClick={() => setCurrentDate(prev => new Date(prev.getTime() - 86400000))}>
+          ← Previous Day
+        </Button>
+        <h1 className="text-2xl font-bold">{formatDateHeader(currentDate)}</h1>
+        <Button onClick={() => setCurrentDate(prev => new Date(prev.getTime() + 86400000))}>
+          Next Day →
+        </Button>
+      </div>
       
       {roles.length > 0 && roles[0].id !== 'default' ? (
         <div className="border rounded-lg overflow-hidden h-[80vh]">
