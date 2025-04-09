@@ -1,7 +1,7 @@
 // src/app/dashboard/page.tsx
 import React from 'react';
 import { AppSidebar } from "@/components/app-sidebar";
-import GanttChartPage from '@/components/schedule';
+import GanttChartPage from '@/components/user-schedule';
 
 export default function DashboardPage() {
   return (
