@@ -494,7 +494,7 @@ export const updateShiftWithVehicle = async (
     const currentVehicleId = shiftData.vehicleId;
     
     if (currentVehicleId !== vehicleId) {
-      console.log(`[updateShiftWithVehicle] Vehicle ID changed, updating vehicle assignments`);
+      console.log(`[updateShiftWithVehicle] Vehicle ID changed from ${currentVehicleId} to ${vehicleId}, updating vehicle assignments`);
       
       // Remove from old vehicle if it exists
       if (currentVehicleId) {
@@ -510,7 +510,7 @@ export const updateShiftWithVehicle = async (
         console.log(`[updateShiftWithVehicle] Successfully added to new vehicle`);
       }
     } else {
-      console.log(`[updateShiftWithVehicle] Vehicle ID unchanged, no vehicle assignment updates needed`);
+      console.log(`[updateShiftWithVehicle] Vehicle ID unchanged (${vehicleId}), no vehicle assignment updates needed`);
     }
     
     console.log(`[updateShiftWithVehicle] Update completed successfully`);

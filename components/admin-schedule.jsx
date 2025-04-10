@@ -849,8 +849,8 @@ const updateShiftFromDialog = async () => {
     const shiftId = editShiftData.id;
     const date = editShiftData.date;
     
-    console.log(`[updateShiftFromDialog] Updating shift ${shiftId} for date ${date}`);
-    console.log(`[updateShiftFromDialog] Original vehicle: ${editShiftData.vehicleId}`);
+    console.log(`[updateShiftFromDialog] Starting update for shift ${shiftId}`);
+    console.log(`[updateShiftFromDialog] Current shift data:`, editShiftData);
     
     // Get the original shift to check for vehicle changes
     const originalShift = shifts.find(s => s.id === shiftId);
@@ -859,9 +859,29 @@ const updateShiftFromDialog = async () => {
       throw new Error(`Original shift ${shiftId} not found`);
     }
     
+    console.log(`[updateShiftFromDialog] Original shift data:`, originalShift);
+    console.log(`[updateShiftFromDialog] Vehicle change: ${originalShift.vehicleId} -> ${editShiftData.vehicleId}`);
+    
     // Format time values for Firestore
     const startTime = editShiftData.startTime instanceof Date ? editShiftData.startTime : new Date(editShiftData.startTime);
     const endTime = editShiftData.endTime instanceof Date ? editShiftData.endTime : new Date(editShiftData.endTime);
+    
+    // Handle vehicle update first if there's a change
+    if (originalShift.vehicleId !== editShiftData.vehicleId) {
+      console.log(`[updateShiftFromDialog] Vehicle assignment changed, updating vehicle first`);
+      try {
+        await updateShiftWithVehicle(
+          shiftId,
+          editShiftData.vehicleId || null,
+          editShiftData.vehicleName || null,
+          date
+        );
+        console.log(`[updateShiftFromDialog] Vehicle assignment updated successfully`);
+      } catch (error) {
+        console.error(`[updateShiftFromDialog] Error updating vehicle assignment:`, error);
+        throw error;
+      }
+    }
     
     // Prepare shift data for Firebase
     const shiftDataForFirebase = {
@@ -885,18 +905,13 @@ const updateShiftFromDialog = async () => {
     console.log(`[updateShiftFromDialog] Updating shift with data:`, shiftDataForFirebase);
     
     // Update the shift in Firebase
-    await updateShiftInFirebase(shiftDataForFirebase);
-    console.log(`[updateShiftFromDialog] Shift updated in Firebase`);
-    
-    // Always update vehicle assignment to ensure it's handled correctly
-    console.log(`[updateShiftFromDialog] Updating vehicle assignment`);
-    await updateShiftWithVehicle(
-      shiftId, 
-      editShiftData.vehicleId || null, 
-      editShiftData.vehicleName || null,
-      date
-    );
-    console.log(`[updateShiftFromDialog] Vehicle assignment updated`);
+    try {
+      await updateShiftInFirebase(shiftDataForFirebase);
+      console.log(`[updateShiftFromDialog] Shift updated in Firebase successfully`);
+    } catch (error) {
+      console.error(`[updateShiftFromDialog] Error updating shift in Firebase:`, error);
+      throw error;
+    }
     
     // Update local state
     setShifts(prevShifts => 

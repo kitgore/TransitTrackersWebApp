@@ -95,18 +95,17 @@ export const addShiftToVehicle = async (vehicleId: string, shiftId: string, date
     if (!assignedShifts[date].includes(shiftId)) {
       assignedShifts[date].push(shiftId);
       console.log(`[addShiftToVehicle] Added shift ${shiftId} to date ${date}`);
+      
+      // Update the vehicle document with the new assignments
+      await updateDoc(vehicleRef, {
+        assignedShifts,
+        updatedAt: serverTimestamp()
+      });
+      
+      console.log(`[addShiftToVehicle] Successfully updated vehicle document`);
     } else {
       console.log(`[addShiftToVehicle] Shift ${shiftId} already assigned to vehicle for date ${date}`);
     }
-    
-    console.log(`[addShiftToVehicle] Updated assigned shifts:`, assignedShifts);
-    
-    await updateDoc(vehicleRef, {
-      assignedShifts,
-      updatedAt: serverTimestamp()
-    });
-    
-    console.log(`[addShiftToVehicle] Successfully updated vehicle document`);
   } catch (error) {
     console.error(`[addShiftToVehicle] Error adding shift ${shiftId} to vehicle ${vehicleId}:`, error);
     throw error;
@@ -140,27 +139,26 @@ export const removeShiftFromVehicle = async (vehicleId: string, shiftId: string,
       
       if (beforeCount !== afterCount) {
         console.log(`[removeShiftFromVehicle] Removed shift ${shiftId} from date ${date}`);
+        
+        // If the date array is empty, remove the date entry
+        if (assignedShifts[date].length === 0) {
+          delete assignedShifts[date];
+          console.log(`[removeShiftFromVehicle] Removed empty date entry for ${date}`);
+        }
+        
+        // Update the vehicle document with the new assignments
+        await updateDoc(vehicleRef, {
+          assignedShifts,
+          updatedAt: serverTimestamp()
+        });
+        
+        console.log(`[removeShiftFromVehicle] Successfully updated vehicle document`);
       } else {
         console.log(`[removeShiftFromVehicle] Shift ${shiftId} was not found in date ${date}`);
-      }
-      
-      // If the date array is empty, remove the date entry
-      if (assignedShifts[date].length === 0) {
-        delete assignedShifts[date];
-        console.log(`[removeShiftFromVehicle] Removed empty date entry for ${date}`);
       }
     } else {
       console.log(`[removeShiftFromVehicle] No shifts found for date ${date}`);
     }
-    
-    console.log(`[removeShiftFromVehicle] Updated assigned shifts:`, assignedShifts);
-    
-    await updateDoc(vehicleRef, {
-      assignedShifts,
-      updatedAt: serverTimestamp()
-    });
-    
-    console.log(`[removeShiftFromVehicle] Successfully updated vehicle document`);
   } catch (error) {
     console.error(`[removeShiftFromVehicle] Error removing shift ${shiftId} from vehicle ${vehicleId}:`, error);
     throw error;
