@@ -859,19 +859,27 @@ const updateShiftFromDialog = async () => {
       throw new Error(`Original shift ${shiftId} not found`);
     }
     
+    // Format time values for Firestore
+    const startTime = editShiftData.startTime instanceof Date ? editShiftData.startTime : new Date(editShiftData.startTime);
+    const endTime = editShiftData.endTime instanceof Date ? editShiftData.endTime : new Date(editShiftData.endTime);
+    
     // Prepare shift data for Firebase
     const shiftDataForFirebase = {
       id: shiftId,
       date: date,
       name: editShiftData.name,
-      startTimeISO: editShiftData.startTimeISO,
-      endTimeISO: editShiftData.endTimeISO,
+      startTimeISO: startTime.toISOString(),
+      endTimeISO: endTime.toISOString(),
+      startTimeFormatted: formatTimeDisplay(startTime),
+      endTimeFormatted: formatTimeDisplay(endTime),
       role: editShiftData.role,
+      roleName: editShiftData.roleName,
       status: editShiftData.status,
       userId: editShiftData.userId,
       vehicleId: editShiftData.vehicleId || null,
       vehicleName: editShiftData.vehicleName || null,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      content: `${editShiftData.name} | ${formatTimeDisplay(startTime)}-${formatTimeDisplay(endTime)}`
     };
     
     console.log(`[updateShiftFromDialog] Updating shift with data:`, shiftDataForFirebase);
@@ -882,7 +890,12 @@ const updateShiftFromDialog = async () => {
     
     // Always update vehicle assignment to ensure it's handled correctly
     console.log(`[updateShiftFromDialog] Updating vehicle assignment`);
-    await updateShiftWithVehicle(shiftId, editShiftData.vehicleId || null, editShiftData.vehicleName || null);
+    await updateShiftWithVehicle(
+      shiftId, 
+      editShiftData.vehicleId || null, 
+      editShiftData.vehicleName || null,
+      date
+    );
     console.log(`[updateShiftFromDialog] Vehicle assignment updated`);
     
     // Update local state
@@ -892,6 +905,8 @@ const updateShiftFromDialog = async () => {
           ? {
               ...shift,
               ...shiftDataForFirebase,
+              start: startTime.toISOString(),
+              end: endTime.toISOString(),
               vehicleId: editShiftData.vehicleId || null,
               vehicleName: editShiftData.vehicleName || null
             }
@@ -1005,9 +1020,9 @@ const handleTimeChange = async (event) => {
       console.log(`Updating vehicle assignment for shift ${updatedShift.id}`);
       await updateShiftWithVehicle(
         updatedShift.id, 
-        updatedShift.date, 
         updatedShift.vehicleId, 
-        updatedShift.vehicleName
+        updatedShift.vehicleName,
+        updatedShift.date
       );
     }
     
