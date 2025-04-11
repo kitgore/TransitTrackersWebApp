@@ -445,105 +445,72 @@ export const removeVehicleFromShift = async (shiftId: string, date: string): Pro
 };
 
 // Update a shift with vehicle assignment
-export const updateShiftWithVehicle = async (shiftId: string, vehicleId: string | null, vehicleName: string | null): Promise<void> => {
+export const updateShiftWithVehicle = async (
+  shiftId: string, 
+  vehicleId: string | null, 
+  vehicleName: string | null,
+  date?: string
+): Promise<void> => {
   try {
-    console.log(`[updateShiftWithVehicle] Starting update for shift ${shiftId} with vehicle ${vehicleId} (${vehicleName})`);
+    console.log(`[updateShiftWithVehicle] Starting update for shift ${shiftId} with vehicle ${vehicleId} (${vehicleName}) for date ${date || 'unknown'}`);
     
-    // First, try to find the shift in the schedules collection
-    let shiftDoc = null;
-    let shiftData = null;
-    let shiftDate = null;
-    
-    // Try to find the shift in the schedules collection
-    const schedulesRef = collection(db, 'schedules');
-    const schedulesSnapshot = await getDocs(schedulesRef);
-    
-    for (const scheduleDoc of schedulesSnapshot.docs) {
-      const date = scheduleDoc.id;
-      const shiftsRef = collection(db, `schedules/${date}/shifts`);
-      const shiftsSnapshot = await getDocs(shiftsRef);
-      
-      for (const doc of shiftsSnapshot.docs) {
-        if (doc.id === shiftId) {
-          shiftDoc = doc;
-          shiftData = doc.data();
-          shiftDate = date;
-          console.log(`[updateShiftWithVehicle] Found shift in schedules/${date}/shifts/${shiftId}`);
-          break;
-        }
-      }
-      
-      if (shiftDoc) break;
+    if (!date) {
+      throw new Error('Date is required to update shift with vehicle');
     }
+
+    // Get the shift reference using the nested collection path
+    const shiftRef = doc(db, `schedules/${date}/shifts`, shiftId);
+    console.log(`[updateShiftWithVehicle] Looking up shift at path: schedules/${date}/shifts/${shiftId}`);
     
-    // If shift not found in schedules, try the shifts collection
-    if (!shiftDoc) {
-      console.log(`[updateShiftWithVehicle] Shift not found in schedules, trying shifts collection...`);
-      const shiftRef = doc(db, 'shifts', shiftId);
-      shiftDoc = await getDoc(shiftRef);
-      
-      if (shiftDoc.exists()) {
-        shiftData = shiftDoc.data();
-        shiftDate = shiftData.date;
-        console.log(`[updateShiftWithVehicle] Found shift in shifts collection`);
-      } else {
-        console.error(`[updateShiftWithVehicle] Shift ${shiftId} not found in any collection`);
-        throw new Error(`Shift ${shiftId} not found`);
-      }
+    const shiftDoc = await getDoc(shiftRef);
+    
+    if (!shiftDoc.exists()) {
+      console.error(`[updateShiftWithVehicle] Shift ${shiftId} not found at path: schedules/${date}/shifts/${shiftId}`);
+      throw new Error(`Shift ${shiftId} not found`);
     }
-    
-    if (!shiftData) {
-      console.error(`[updateShiftWithVehicle] Shift ${shiftId} has no data`);
-      throw new Error(`Shift ${shiftId} has no data`);
-    }
-    
-    if (!shiftDate) {
-      console.error(`[updateShiftWithVehicle] Shift ${shiftId} has no date`);
-      throw new Error(`Shift ${shiftId} has no date`);
-    }
-    
-    const currentVehicleId = shiftData.vehicleId;
-    
-    console.log(`[updateShiftWithVehicle] Current vehicle ID: ${currentVehicleId}, New vehicle ID: ${vehicleId}`);
+
+    const shiftData = shiftDoc.data();
+    console.log(`[updateShiftWithVehicle] Found shift data:`, shiftData);
     
     // Update the shift with new vehicle information
     const updateData: any = {
-      vehicleId: vehicleId,
-      vehicleName: vehicleName,
+      vehicleId: vehicleId || null,
+      vehicleName: vehicleName || null,
       updatedAt: serverTimestamp()
     };
     
-    // Get the correct document reference based on where we found the shift
-    let docRef;
-    if (shiftDoc.ref.path.includes('schedules')) {
-      docRef = shiftDoc.ref;
-    } else {
-      docRef = doc(db, 'shifts', shiftId);
-    }
+    // Remove any undefined values
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === undefined) {
+        delete updateData[key];
+      }
+    });
     
     console.log(`[updateShiftWithVehicle] Updating shift with data:`, updateData);
-    await updateDoc(docRef, updateData);
+    await updateDoc(shiftRef, updateData);
     console.log(`[updateShiftWithVehicle] Successfully updated shift document`);
     
     // Handle vehicle assignment changes
+    const currentVehicleId = shiftData.vehicleId;
+    
     if (currentVehicleId !== vehicleId) {
-      console.log(`[updateShiftWithVehicle] Vehicle ID changed, updating vehicle assignments`);
+      console.log(`[updateShiftWithVehicle] Vehicle ID changed from ${currentVehicleId} to ${vehicleId}, updating vehicle assignments`);
       
       // Remove from old vehicle if it exists
       if (currentVehicleId) {
         console.log(`[updateShiftWithVehicle] Removing shift from old vehicle ${currentVehicleId}`);
-        await removeShiftFromVehicle(currentVehicleId, shiftId, shiftDate);
+        await removeShiftFromVehicle(currentVehicleId, shiftId, date);
         console.log(`[updateShiftWithVehicle] Successfully removed from old vehicle`);
       }
       
       // Add to new vehicle if provided
       if (vehicleId) {
         console.log(`[updateShiftWithVehicle] Adding shift to new vehicle ${vehicleId}`);
-        await addShiftToVehicle(vehicleId, shiftId, shiftDate);
+        await addShiftToVehicle(vehicleId, shiftId, date);
         console.log(`[updateShiftWithVehicle] Successfully added to new vehicle`);
       }
     } else {
-      console.log(`[updateShiftWithVehicle] Vehicle ID unchanged, no vehicle assignment updates needed`);
+      console.log(`[updateShiftWithVehicle] Vehicle ID unchanged (${vehicleId}), no vehicle assignment updates needed`);
     }
     
     console.log(`[updateShiftWithVehicle] Update completed successfully`);

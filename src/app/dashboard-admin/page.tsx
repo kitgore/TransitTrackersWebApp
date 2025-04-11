@@ -4,7 +4,7 @@
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { AppSidebar } from "@/components/app-sidebar";
-import GanttChartPage from '@/components/schedule';
+import GanttChartPage from '@/components/admin-schedule';
 import { useAuth } from '@/context/AuthContext';
 
 export default function DashboardPage() {
