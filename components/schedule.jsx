@@ -92,6 +92,36 @@ export default function ShiftScheduler() {
     vehicleName: null,
   });
 
+  // state for repeating days
+  const [repeatDays, setRepeatDays] = useState({
+    M: false,
+    Tu: false,
+    W: false,
+    Th: false,
+    F: false,
+    Sa: false,
+    Su: false,
+  });
+
+  // function to toggle the day checkmarks
+  const toggleRepeatDay = (day) => {
+    setRepeatDays(prev => ({ ...prev, [day]: !prev[day] }));
+  };
+
+  const [editRepeatDays, setEditRepeatDays] = useState({
+    M: false,
+    Tu: false,
+    W: false,
+    Th: false,
+    F: false,
+    Sa: false,
+    Su: false,
+  });
+
+  const toggleEditRepeatDay = (day) => {
+    setEditRepeatDays(prev => ({ ...prev, [day]: !prev[day] }));
+  };
+
   // State for roles and users
   const [roles, setRoles] = useState([
       { id: 'default', content: 'Loading Roles...' }
@@ -1290,6 +1320,25 @@ const handleTimeChange = async (event) => {
               />
             </div>
           </div>
+
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right">
+              Repeat
+            </Label>
+            <div className="col-span-3 flex flex-wrap gap-2">
+              {['M', 'T', 'W', 'Th', 'F', 'Sa', 'Su'].map((day) => (
+                <label key={day} className="flex items-center space-x-1">
+                  <input
+                    type="checkbox"
+                    checked={!!repeatDays[day]} // Use !! to force boolean
+                    onChange={() => toggleRepeatDay(day)}
+                    className="accent-blue-600"
+                  />
+                  <span>{day}</span>
+                </label>
+              ))}
+            </div>
+          </div>
           
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
@@ -1394,6 +1443,27 @@ const handleTimeChange = async (event) => {
                   className="col-span-3"
                 />
               </div>
+
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label className="text-right">
+                  Repeat
+                </Label>
+                <div className="col-span-3 flex flex-wrap gap-2">
+                  {['M', 'T', 'W', 'Th', 'F', 'Sa', 'Su'].map((day) => (
+                    <label key={day} className="flex items-center space-x-1">
+                      <input
+                        type="checkbox"
+                        checked={!!editRepeatDays[day]}
+                        onChange={() => toggleEditRepeatDay(day)}
+                        className="accent-blue-600"
+                      />
+                      <span>{day}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+
             </div>
           ) : (
             <div className="py-4 text-center">Loading shift details...</div>
