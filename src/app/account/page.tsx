@@ -1,114 +1,114 @@
 'use client';
-
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '@/src/firebase/config';
-import { updateProfile, updateEmail } from 'firebase/auth';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
+import { getUserProfile, updateUserProfile } from '@/src/firebase/userService';
+import { updateEmail } from 'firebase/auth';
+
+
 
 export default function AccountPage() {
-  const router = useRouter();
-  const user = auth.currentUser;
-
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const [user, setUser] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
   
-  const [editingField, setEditingField] = useState<string | null>(null);
-  const [updatedValue, setUpdatedValue] = useState('');
+const [editingField, setEditingField] = useState<string | null>(null);
+const [editValue, setEditValue] = useState<string>('');
 
   useEffect(() => {
-    if (user) {
-      const [first = '', last = ''] = user.displayName?.split(' ') || [];
-      setFirstName(first);
-      setLastName(last);
-      setEmail(user.email || '');
-      setPhoneNumber(user.phoneNumber || '');
-    }
-  }, [user]);
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+        const data = await getUserProfile(currentUser.uid);
+        setProfile(data);
+      }
+    });
 
-  const handleStartEdit = (field: string, currentValue: string) => {
-    setEditingField(field);
-    setUpdatedValue(currentValue);
-  };
+    return () => unsubscribe();
+  }, []);
 
-  const handleCancelEdit = () => {
-    setEditingField(null);
-    setUpdatedValue('');
-  };
-
-  const handleSaveEdit = async () => {
+  const handleChange = async (field: string, value: string) => {
     if (!user) return;
-
-    try {
-      if (editingField === 'firstName' || editingField === 'lastName') {
-        const newDisplayName =
-          editingField === 'firstName'
-            ? `${updatedValue} ${lastName}`
-            : `${firstName} ${updatedValue}`;
-        await updateProfile(user, { displayName: newDisplayName });
-        if (editingField === 'firstName') setFirstName(updatedValue);
-        else setLastName(updatedValue);
+  
+    const updatedProfile = { ...profile, [field]: value };
+    setProfile(updatedProfile);
+  
+    if (field === 'email') {
+      try {
+        await user.updateEmail(value); // update in Firebase Auth
+      } catch (authErr: any) {
+        alert("Failed to update email in Auth: " + authErr.message);
       }
-
-      if (editingField === 'email') {
-        await updateEmail(user, updatedValue);
-        setEmail(updatedValue);
-      }
-
-      if (editingField === 'phoneNumber') {
-        // Firebase Auth doesn't support phone number update directly
-        alert('Phone number update not supported via web.');
-      }
-
-      setEditingField(null);
-      setUpdatedValue('');
-    } catch (error: any) {
-      alert('Update failed: ' + error.message);
     }
+  
+    await updateUserProfile(user.uid, { [field]: value }); // update in Firestore
   };
+  
 
-  const renderField = (label: string, value: string, fieldKey: string) => {
-    const isEditing = editingField === fieldKey;
-
-    return (
-      <div className="mb-4">
-        <label className="block text-sm font-medium mb-1">{label}</label>
-        {isEditing ? (
-          <div className="flex gap-2">
-            <Input
-              value={updatedValue}
-              onChange={(e) => setUpdatedValue(e.target.value)}
-              className="w-full"
-            />
-            <Button onClick={handleSaveEdit}>Save</Button>
-            <Button variant="ghost" onClick={handleCancelEdit}>
-              Cancel
-            </Button>
-          </div>
-        ) : (
-          <div className="flex items-center justify-between">
-            <p>{value || 'Not provided'}</p>
-            <Button variant="ghost" onClick={() => handleStartEdit(fieldKey, value)}>
-              Change
-            </Button>
-          </div>
-        )}
-      </div>
-    );
-  };
+  if (!profile) return <p>Loading...</p>;
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen bg-background p-6">
-      <div className="w-full max-w-xl bg-white dark:bg-gray-900 p-6 rounded-lg shadow-md">
-        <h1 className="text-2xl font-bold mb-6 text-center">Account Settings</h1>
-        {renderField('First Name', firstName, 'firstName')}
-        {renderField('Last Name', lastName, 'lastName')}
-        {renderField('Email', email, 'email')}
-        {renderField('Phone Number', phoneNumber, 'phoneNumber')}
+    <div className="max-w-md mx-auto mt-20 p-6 bg-white shadow-md rounded-lg">
+      <h1 className="text-2xl font-bold mb-4">Account Settings</h1>
+      <ul className="space-y-4">
+  {['firstName', 'lastName', 'email', 'phoneNumber'].map((field) => (
+    <li key={field} className="flex justify-between items-center">
+      <div>
+        <strong>{field.replace(/([A-Z])/g, ' $1')}</strong>:{' '}
+        {editingField === field ? (
+          <input
+            type="text"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            className="border rounded px-2 py-1"
+          />
+        ) : (
+          profile[field] || 'Not provided'
+        )}
       </div>
+
+      {editingField === field ? (
+        <div className="space-x-2">
+          <button
+            onClick={() => {
+              handleChange(field, editValue);
+              setEditingField(null);
+            }}
+            className="text-green-500 hover:underline"
+          >
+            Update
+          </button>
+          <button
+            onClick={() => setEditingField(null)}
+            className="text-red-500 hover:underline"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => {
+            setEditingField(field);
+            setEditValue(profile[field] || '');
+          }}
+          className="text-blue-500 underline"
+        >
+          Change
+        </button>
+      )}
+    </li>
+  ))}
+</ul>
+
+
+      <div className="mt-8 text-center">
+  <button
+    onClick={() => window.history.back()}
+    className="text-sm text-gray-600 hover:text-blue-500 transition"
+  >
+    ← Back
+  </button>
+</div>
+
     </div>
   );
 }

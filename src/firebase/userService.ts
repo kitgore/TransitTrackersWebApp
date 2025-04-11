@@ -1,6 +1,6 @@
 // src/services/userService.ts
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/src/firebase/config';
 
 interface NewUserData {
@@ -50,5 +50,34 @@ export const userService = {
           throw new Error('Failed to create user. Please try again.');
       }
     }
+  }
+};
+
+
+import { onAuthStateChanged } from 'firebase/auth';
+
+export const getUserProfile = async (uid: string) => {
+  try {
+    const userDoc = await getDoc(doc(db, 'users', uid));
+    if (userDoc.exists()) {
+      return userDoc.data();
+    } else {
+      throw new Error('User profile not found');
+    }
+  } catch (error) {
+    console.error('Error fetching user profile:', error);
+    throw error;
+  }
+};
+
+export const updateUserProfile = async (uid: string, updates: Partial<NewUserData>) => {
+  try {
+    await updateDoc(doc(db, 'users', uid), {
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Error updating user profile:', error);
+    throw error;
   }
 };
