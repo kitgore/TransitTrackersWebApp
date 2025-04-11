@@ -77,7 +77,7 @@ export function NavUser({ user }: { user: { name: string; email: string; avatar:
                 <CreditCard />
                 Billing
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => router.push('/notifications')}>
                 <Bell />
                 Notifications
               </DropdownMenuItem>
