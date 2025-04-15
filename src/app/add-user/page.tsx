@@ -10,6 +10,7 @@ import { AppSidebar } from '@/components/app-sidebar';
 import { ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { getAuth, sendPasswordResetEmail } from "firebase/auth";
 
 import {
   Card,
@@ -54,17 +55,10 @@ export default function UsersPage() {
       return <div className="text-center text-red-500 font-bold text-lg mt-10">Access Denied: You do not have admin privileges.</div>;
   }
 
-  const validatePassword = (password: string) => {
-    if (password.length < 6) {
-      throw new Error('Password must be at least 6 characters long');
-    }
-  };
-
   const validateForm = () => {
-    if (!newUser.email || !newUser.password) {
-      throw new Error('Email and password are required');
+    if (!newUser.email || !newUser.phoneNumber) {
+      throw new Error('Email and phone number are required');
     }
-    validatePassword(newUser.password);
   };
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -74,10 +68,26 @@ export default function UsersPage() {
     try {
       validateForm();
 
-      await userService.createUser(newUser);
-      toast({
-        title: "User created successfully!",
-      });
+      const randomPassword = Math.random().toString(36).slice(-10);
+      const userToCreate = { ...newUser, password: randomPassword };
+
+      await userService.createUser(userToCreate);
+
+      // Send the password reset email
+      const auth = getAuth(); // Firebase client-side auth
+
+      try {
+          await sendPasswordResetEmail(auth, newUser.email);
+          toast({
+            title: 'User created successfully!',
+            description: 'Password reset email sent!'
+          });
+      } catch (error: any) {
+        toast({
+          title: 'User created, but email failed',
+          description: error.message || ''
+        });
+      }
 
       // Reset form
       setNewUser({
@@ -115,8 +125,8 @@ export default function UsersPage() {
           <Card>
             <CardHeader>
               <CardTitle>Create New User</CardTitle>
-              <CardDescription>
-                Login information will be sent to the driver via email.
+              <CardDescription className="text-red-500">
+                An email will be sent to the new user so they can reset their password and log in. Ensure the email address is accurate and ask them to check their inbox.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -175,7 +185,7 @@ export default function UsersPage() {
                   />
                 </div>
 
-                <div className="space-y-2">
+                {/*<div className="space-y-2">
                   <label htmlFor="password">Password</label>
                   <Input
                     id="password"
@@ -188,7 +198,7 @@ export default function UsersPage() {
                     required
                     minLength={6}
                   />
-                </div>
+                </div>*/}
 
                 {/* Role Toggle */}
                 <div className="flex items-center justify-end space-x-2">

@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { getAuth, sendPasswordResetEmail } from "firebase/auth";
 import { useAuth } from "@/context/AuthContext";  
-import { signOut } from 'firebase/auth';
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
@@ -59,7 +58,7 @@ export default function LoginPage() {
         if (emailPrompt) {
             try {
                 await sendPasswordResetEmail(auth, emailPrompt);
-                alert('Password reset email sent! Check your inbox.');
+                alert('Password reset email sent!');
             } catch (error: any) {
                 alert(error.message);
             }

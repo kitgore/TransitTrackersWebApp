@@ -15,24 +15,37 @@ interface NewUserData {
 export const userService = {
   createUser: async (userData: NewUserData) => {
     try {
-      // Create authentication user
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        userData.email,
-        userData.password
-      );
+      // Call backend API to create the user in Firebase Auth
+      const res = await fetch('/api/createUser', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userData),
+      });
+
+      if (!res.ok) {
+        let errorMessage = 'Failed to create user';
+        try {
+          const error = await res.json();
+          errorMessage = error.error || errorMessage;
+        } catch (err) {
+          console.error('Non-JSON error response from server');
+        }
+        throw new Error(errorMessage);
+      }      
+
+      const { uid } = await res.json();
 
       // Store additional user data in Firestore
-      await setDoc(doc(db, 'users', userCredential.user.uid), {
+      await setDoc(doc(db, 'users', uid), {
         firstName: userData.firstName,
         lastName: userData.lastName,
         phoneNumber: userData.phoneNumber,
         email: userData.email,
-        role: userData.role, // Ensure role is stored in Firestore
+        role: userData.role,
         createdAt: new Date().toISOString(),
       });
 
-      return userCredential.user;
+      return uid;
     } catch (error: any) {
       // Handle specific Firebase error codes
       const errorCode = error.code;
@@ -52,7 +65,6 @@ export const userService = {
     }
   }
 };
-
 
 import { onAuthStateChanged } from 'firebase/auth';
 
