@@ -103,7 +103,7 @@ export default function MyShiftsPage() {
   }
 
   return (
-    <div className="container mx-auto p-4">
+    <div className="container mx-auto p-4 max-w-3xl">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">My Upcoming Shifts</h1>
         <Button asChild>
@@ -118,28 +118,23 @@ export default function MyShiftsPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-2">
           {shifts.map((shift) => (
             <Card key={shift.id}>
-              <CardHeader>
-                <CardTitle>{shift.roleName}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-2">
-                  <div className="flex justify-between">
-                    <span className="font-medium">Date:</span>
-                    <span>{formatDate(shift.startTimeISO)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium">Time:</span>
-                    <span>{formatTime(shift.startTimeISO)} - {formatTime(shift.endTimeISO)}</span>
-                  </div>
+              <CardContent className="p-0">
+                <div className="flex items-center gap-4 text-xl h-16 px-4">
+                  <span className="font-semibold">{shift.roleName}</span>
+                  <div className="flex-1 flex justify-end items-center gap-4">
                   {shift.vehicleName && (
-                    <div className="flex justify-between">
-                      <span className="font-medium">Vehicle:</span>
-                      <span>{shift.vehicleName}</span>
-                    </div>
-                  )}
+                      <>
+                        <span className="text-base text-gray-600">{shift.vehicleName}</span>
+                        <span className="text-muted-foreground">|</span>
+                      </>
+                    )}
+                    <span className="text-base text-gray-600">{formatDate(shift.startTimeISO)}</span>
+                    <span className="text-muted-foreground">|</span>
+                    <span className="text-base text-gray-600">{formatTime(shift.startTimeISO)} - {formatTime(shift.endTimeISO)}</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
