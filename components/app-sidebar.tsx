@@ -19,14 +19,21 @@ interface SidebarProps {
   children: React.ReactNode;
 }
 
-const allNavigationItems = [
+const adminOnlyNavigationItems = [
+  { name: "Schedule Manager", url: "/dashboard-admin", icon: Calendar },
+  { name: "Driver Messaging", url: "/messaging", icon: MessageSquare },
+  { name: "Manage Drivers", url: "/users", icon: BookUser },
+  { name: "Administrator Panel", url: "/admin", icon: Shield },
+  { name: "Role Management", url: "/roles", icon: ClipboardList }
+];
+
+const userOnlyNavigationItems = [
   { name: "Schedule", url: "/dashboard", icon: Calendar },
-  { name: "Driver Messaging", url: "/messaging", icon: MessageSquare, requiresAdmin: true },
-  { name: "Manage Drivers", url: "/users", icon: BookUser, requiresAdmin: true },
-  { name: "Administrator Panel", url: "/admin", icon: Shield, requiresAdmin: true },
-  { name: "Role Management", url: "/roles", icon: ClipboardList, requiresAdmin: true },
-  { name: "User Settings", url: "/account", icon: BookUser },
   { name: "Notifications", url: "/notifications", icon: MessageSquare }
+];
+
+const sharedNavigationItems = [
+  { name: "User Settings", url: "/account", icon: BookUser }
 ];
 
 export function AppSidebar({ children }: SidebarProps) {
@@ -56,9 +63,9 @@ export function AppSidebar({ children }: SidebarProps) {
 
   if (!user || !profile) return null;
 
-  const filteredNavigationItems = allNavigationItems.filter(
-    (item) => !item.requiresAdmin || role === "admin"
-  );
+  const navigationItems = role === "admin" 
+    ? [...adminOnlyNavigationItems, ...sharedNavigationItems]
+    : [...userOnlyNavigationItems, ...sharedNavigationItems];
 
   const fullName = `${profile.firstName || 'User'} ${profile.lastName || ''}`.trim();
   const initials = `${(profile.firstName || ' ')[0]}${(profile.lastName || ' ')[0]}`.toUpperCase();
@@ -78,7 +85,7 @@ export function AppSidebar({ children }: SidebarProps) {
         </SidebarHeader>
         <SidebarContent>
           <SidebarSeparator className="mx-0" />
-          <NavItems items={filteredNavigationItems} />
+          <NavItems items={navigationItems} />
         </SidebarContent>
         <SidebarFooter />
         <SidebarRail />
