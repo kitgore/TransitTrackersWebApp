@@ -22,7 +22,7 @@ import {
   getVehicleAvailability,
   Vehicle
 } from './vehicleService';
-
+import { getAuth } from 'firebase/auth';
 // Type definitions
 interface Shift {
   id?: string;
@@ -545,5 +545,79 @@ export const getFutureShiftsForVehicle = async (vehicleId: string): Promise<{ da
   } catch (error) {
     console.error(`Error getting future shifts for vehicle ${vehicleId}:`, error);
     throw error;
+  }
+};
+
+export const fetchShiftsByUser = async (userId: string): Promise<Shift[]> => {
+  try {
+    console.log(`[fetchShiftsByUser] Starting fetch for user ID: ${userId}`);
+    
+    // Calculate date range for next 2 months
+    const today = new Date();
+    const startDate = new Date(today);
+    const endDate = new Date(today);
+    endDate.setMonth(endDate.getMonth() + 2);
+    
+    // Generate array of dates in YYYY-MM-DD format
+    const dateRange: string[] = [];
+    const currentDate = new Date(startDate);
+    
+    while (currentDate <= endDate) {
+      dateRange.push(currentDate.toISOString().split('T')[0]);
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    console.log(`[fetchShiftsByUser] Generated date range with ${dateRange.length} dates`);
+    
+    // No need to filter future dates since we're already starting from today
+    const futureDates = dateRange;
+    console.log(`[fetchShiftsByUser] Looking at ${futureDates.length} days from today to ${endDate.toISOString().split('T')[0]}`);
+    
+    const allShifts: Shift[] = [];
+    
+    // Process each future date
+    const fetchPromises = futureDates.map(async (date) => {
+      try {
+        // Try to directly access the shifts subcollection for this date
+        const shiftsCollection = collection(db, `schedules/${date}/shifts`);
+        const userShiftsQuery = query(shiftsCollection, where('userId', '==', userId));
+        const userShiftsSnapshot = await getDocs(userShiftsQuery);
+        
+        console.log(`[fetchShiftsByUser] Found ${userShiftsSnapshot.size} shifts for user on date ${date}`);
+        
+        userShiftsSnapshot.docs.forEach(shiftDoc => {
+          const shiftData = shiftDoc.data();
+          allShifts.push({
+            ...shiftData,
+            id: shiftDoc.id,
+            firestoreId: shiftDoc.id,
+            date: date,
+            createdAt: shiftData.createdAt?.toDate(),
+            updatedAt: shiftData.updatedAt?.toDate()
+          } as Shift);
+        });
+      } catch (error) {
+        console.error(`[fetchShiftsByUser] Error processing shifts for date ${date}:`, error);
+        // Continue with next date even if one fails
+      }
+    });
+    
+    // Wait for all promises to resolve
+    await Promise.all(fetchPromises);
+    
+    console.log(`[fetchShiftsByUser] Total matching shifts found: ${allShifts.length}`);
+    
+    // Sort shifts by start time
+    if (allShifts.length > 0) {
+      const sortedShifts = allShifts.sort((a, b) => 
+        new Date(a.startTimeISO).getTime() - new Date(b.startTimeISO).getTime()
+      );
+      return sortedShifts;
+    }
+    
+    return [];
+  } catch (error) {
+    console.error('[fetchShiftsByUser] Error:', error);
+    return []; // Return empty array instead of throwing
   }
 };

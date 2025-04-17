@@ -27,6 +27,7 @@ import {
   updateShiftWithVehicle
 } from '@/src/firebase/shiftService';
 import { useAuth } from '@/context/AuthContext';
+import Link from 'next/link';
 
 // Constants for shift status
 const SHIFT_STATUS = {
@@ -890,7 +891,12 @@ useEffect(() => {
         <Button onClick={() => setCurrentDate(prev => new Date(prev.getTime() - 86400000))}>
           ← Previous Day
         </Button>
-        <h1 className="text-2xl font-bold">{formatDateHeader(currentDate)}</h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-bold">{formatDateHeader(currentDate)}</h1>
+          <Button asChild variant="outline">
+            <Link href="/my-shifts">View My Shifts</Link>
+          </Button>
+        </div>
         <Button onClick={() => setCurrentDate(prev => new Date(prev.getTime() + 86400000))}>
           Next Day →
         </Button>
