@@ -49,23 +49,18 @@ export const userService = {
       return uid;
     } catch (error: any) {
       // Handle specific Firebase error codes
-      const errorCode = error.code;
-      switch (errorCode) {
-        case 'auth/email-already-in-use':
-          throw new Error('This email is already registered');
-        case 'auth/invalid-email':
-          throw new Error('Invalid email address');
-        case 'auth/operation-not-allowed':
-          throw new Error('Email/password accounts are not enabled. Please contact support.');
-        case 'auth/weak-password':
-          throw new Error('Password is too weak. Must be at least 6 characters');
-        default:
-          console.error('Error creating user:', error);
-          throw new Error('Failed to create user. Please try again.');
+      if (error.message.includes('The email address is already in use by another account.')) {
+        throw new Error('This email is already registered');
       }
+
+      // Fallback for other errors (only if the specific error wasn't thrown)
+      console.error('Error creating user:', error);
+      throw new Error('Failed to create user. Please try again.');
     }
   }
 };
+
+//'auth/email-already-in-use'
 
 import { onAuthStateChanged } from 'firebase/auth';
 

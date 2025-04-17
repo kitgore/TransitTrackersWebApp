@@ -43,6 +43,13 @@ export default function UsersPage() {
     role: 'driver', // Default role is "driver"
   });
 
+  const [phoneParts, setPhoneParts] = useState({
+    country: '1',
+    area: '',
+    prefix: '',
+    line: '',
+  });
+
   if (authLoading) {
     return <div>Loading...</div>;
   } 
@@ -56,9 +63,16 @@ export default function UsersPage() {
   }
 
   const validateForm = () => {
-    if (!newUser.email || !newUser.phoneNumber) {
-      throw new Error('Email and phone number are required');
+    if (!newUser.email) {
+      throw new Error('Email is required');
     }
+    
+    const { country, area, prefix, line } = phoneParts;
+    
+    if (![country, area, prefix, line].every(part => /^\d+$/.test(part))) {
+      throw new Error('Phone number is invalid.');
+    }
+    
   };
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -69,9 +83,31 @@ export default function UsersPage() {
       validateForm();
 
       const randomPassword = Math.random().toString(36).slice(-10);
-      const userToCreate = { ...newUser, password: randomPassword };
 
-      await userService.createUser(userToCreate);
+      const fullPhoneNumber = `+${phoneParts.country}${phoneParts.area}${phoneParts.prefix}${phoneParts.line}`;
+      const userToCreate = { ...newUser, phoneNumber: fullPhoneNumber, password: randomPassword };
+
+      try {
+        await userService.createUser(userToCreate);
+      }
+      catch (error: any) {
+        console.error('User creation error:', error);
+      
+        let errorMessage = 'Failed to create user';
+      
+        // Check for the specific error about the email already being in use
+        if (error.message === 'This email is already registered') {
+          errorMessage = 'That email is already in use by another account.';
+        }
+      
+        // Show the toast with the appropriate error message
+        toast({
+          title: 'Failed to create user',
+          description: errorMessage,
+        });
+      
+        return; // Stop execution if user creation fails
+      }      
 
       // Send the password reset email
       const auth = getAuth(); // Firebase client-side auth
@@ -96,7 +132,14 @@ export default function UsersPage() {
         firstName: '',
         lastName: '',
         phoneNumber: '',
-        role: 'driver', // Reset to default role
+        role: 'driver',
+      });
+
+      setPhoneParts({
+        country: '1',
+        area: '',
+        prefix: '',
+        line: '',
       });
     } catch (error: any) {
       console.error('Error creating user:', error);
@@ -174,15 +217,39 @@ export default function UsersPage() {
 
                 <div className="space-y-2">
                   <label htmlFor="phoneNumber">Phone Number</label>
-                  <Input
-                    id="phoneNumber"
-                    type="tel"
-                    placeholder="Enter phone number"
-                    value={newUser.phoneNumber}
-                    onChange={(e) =>
-                      setNewUser({ ...newUser, phoneNumber: e.target.value })
-                    }
-                  />
+                  <div className="flex items-center space-x-2">
+                    <Input
+                      id="country"
+                      className="w-14"
+                      value={phoneParts.country}
+                      onChange={(e) => setPhoneParts({ ...phoneParts, country: e.target.value })}
+                      maxLength={1}
+                    />
+                    <span className="text-gray-500">(</span>
+                    <Input
+                      id="area"
+                      className="w-20"
+                      value={phoneParts.area}
+                      onChange={(e) => setPhoneParts({ ...phoneParts, area: e.target.value })}
+                      maxLength={3}
+                    />
+                    <span className="text-gray-500">)</span>
+                    <Input
+                      id="prefix"
+                      className="w-20"
+                      value={phoneParts.prefix}
+                      onChange={(e) => setPhoneParts({ ...phoneParts, prefix: e.target.value })}
+                      maxLength={3}
+                    />
+                    <span className="text-gray-500">-</span>
+                    <Input
+                      id="line"
+                      className="w-24"
+                      value={phoneParts.line}
+                      onChange={(e) => setPhoneParts({ ...phoneParts, line: e.target.value })}
+                      maxLength={4}
+                    />
+                  </div>
                 </div>
 
                 {/*<div className="space-y-2">
