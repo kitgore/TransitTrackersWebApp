@@ -68,21 +68,7 @@ export function NavUser({ user }: { user: { name: string; email: string; avatar:
             align="start"
             sideOffset={4}
           >
-            <DropdownMenuGroup>
-              <DropdownMenuItem onSelect={() => router.push('/account')}>
-                <BadgeCheck />
-                Account
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <CreditCard />
-                Billing
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => router.push('/notifications')}>
-                <Bell />
-                Notifications
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
+            
             <DropdownMenuItem onSelect={() => signOut(auth)}>
               <LogOut />
               Log out

@@ -9,6 +9,7 @@ interface NewUserData {
   firstName: string;
   lastName: string;
   phoneNumber: string;
+  avatarUrl?: string;
   role: string; // Added role field
 }
 

@@ -12,6 +12,11 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+
+import { Popover, Calendar } from 'antd';
+import { CalendarOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
+
 import { Label } from '@/components/ui/label';
 import { 
   fetchShiftsByDate, 
@@ -892,7 +897,24 @@ useEffect(() => {
           ← Previous Day
         </Button>
         <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold">{formatDateHeader(currentDate)}</h1>
+        <Popover
+          placement="bottom"
+          trigger="click"
+          content={
+            <div style={{ width: '260px' }}>
+              <Calendar 
+                fullscreen={false} 
+                value={dayjs(currentDate)} 
+                onSelect={(date) => setCurrentDate(date.toDate())}
+              />
+            </div>
+          }
+        >
+          <div className="cursor-pointer flex items-center space-x-2 text-2xl font-bold">
+            <CalendarOutlined />
+            <span>{formatDateHeader(currentDate)}</span>
+          </div>
+        </Popover>
           <Button asChild variant="outline">
             <Link href="/my-shifts">View My Shifts</Link>
           </Button>
