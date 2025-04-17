@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { Timeline } from 'vis-timeline/standalone';
-import { DataSet } from 'vis-data/standalone';
-import 'vis-timeline/styles/vis-timeline-graph2d.min.css';
+import { Timeline } from 'vis-timeline';
+import { DataSet } from 'vis-data';
+import 'vis-timeline/dist/vis-timeline-graph2d.min.css';
 
 const GanttTimeline = ({ 
   items = [], 

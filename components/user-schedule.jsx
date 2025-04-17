@@ -12,9 +12,9 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-
-import { Popover, Calendar } from 'antd';
-import { CalendarOutlined } from '@ant-design/icons';
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarIcon } from "lucide-react";
 import dayjs from 'dayjs';
 
 import { Label } from '@/components/ui/label';
@@ -33,6 +33,7 @@ import {
 } from '@/src/firebase/shiftService';
 import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
+import { cn } from '@/lib/utils';
 
 // Constants for shift status
 const SHIFT_STATUS = {
@@ -897,24 +898,32 @@ useEffect(() => {
           ← Previous Day
         </Button>
         <div className="flex items-center gap-4">
-        <Popover
-          placement="bottom"
-          trigger="click"
-          content={
-            <div style={{ width: '260px' }}>
-              <Calendar 
-                fullscreen={false} 
-                value={dayjs(currentDate)} 
-                onSelect={(date) => setCurrentDate(date.toDate())}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={"outline"}
+                className={cn(
+                  "w-[280px] justify-start text-left font-normal",
+                  !currentDate && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                <span>{formatDateHeader(currentDate)}</span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              <Calendar
+                mode="single"
+                selected={currentDate}
+                onSelect={(date) => {
+                  if (date) {
+                    setCurrentDate(date);
+                  }
+                }}
+                initialFocus
               />
-            </div>
-          }
-        >
-          <div className="cursor-pointer flex items-center space-x-2 text-2xl font-bold">
-            <CalendarOutlined />
-            <span>{formatDateHeader(currentDate)}</span>
-          </div>
-        </Popover>
+            </PopoverContent>
+          </Popover>
           <Button asChild variant="outline">
             <Link href="/my-shifts">View My Shifts</Link>
           </Button>

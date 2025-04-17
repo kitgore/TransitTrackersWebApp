@@ -144,6 +144,9 @@ export default function ShiftScheduler() {
   // State for shifts - start with empty array
   const [shifts, setShifts] = useState([]);
   
+  // Reference to track resize state
+  const isResizingRef = useRef(false);
+  
   // ========== Utility Functions ==========
   
   // Format date consistently - this is critical!
@@ -704,6 +707,12 @@ useEffect(() => {
     const now = Date.now();
     console.log('Timeline clicked:', clickEvent);
     
+    // If we're in the middle of a resize operation, ignore the click
+    if (isResizingRef.current) {
+      console.log('Ignoring click during resize operation');
+      return;
+    }
+    
     // Log the item ID if it's a shift click
     if (clickEvent.item) {
       console.log(`Shift clicked: ${clickEvent.item}, time: ${now}, last click time: ${lastClickRef.current.time}`);
@@ -1010,6 +1019,9 @@ const handleTimeChange = async (event) => {
   
   if (!event || !event.id) return;
   
+  // Set resize flag
+  isResizingRef.current = true;
+  
   try {
     // Find the shift that was changed - should use the Firebase document ID
     const originalShift = shifts.find(shift => shift.id === event.id);
@@ -1083,6 +1095,11 @@ const handleTimeChange = async (event) => {
   } catch (error) {
     console.error('Failed to update shift time:', error);
     // Could reset the timeline item to its original position
+  } finally {
+    // Reset resize flag after a short delay to prevent accidental clicks
+    setTimeout(() => {
+      isResizingRef.current = false;
+    }, 500);
   }
 };
 
