@@ -63,12 +63,6 @@ export default function ShiftScheduler() {
   // Get today's date for creating the sample data
   const [currentDate, setCurrentDate] = useState(() => new Date());
   
-  // Track click information
-  const lastClickRef = useRef({
-    time: 0,
-    item: null
-  });
-  
   // State for dialog control - only keep the edit dialog for picking up shifts
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   
@@ -729,27 +723,13 @@ useEffect(() => {
   
   // Function to handle ANY click on the timeline
   const handleTimelineClick = (clickEvent) => {
-    const now = Date.now();
     console.log('Timeline clicked:', clickEvent);
     
-    // Log the item ID if it's a shift click
+    // If an item was clicked, handle the shift pickup
     if (clickEvent.item) {
-      console.log(`Shift clicked: ${clickEvent.item}, time: ${now}, last click time: ${lastClickRef.current.time}`);
-      
-      // Check if this is a double click (same item, within 500ms)
-      if (clickEvent.item === lastClickRef.current.item && 
-          now - lastClickRef.current.time < 500) {
-        console.log(`DOUBLE CLICK DETECTED on item: ${clickEvent.item}`);
-        handleShiftPickup(clickEvent.item);
-      }
-      
-      // Update the last click info
-      lastClickRef.current = {
-        time: now,
-        item: clickEvent.item
-      };
+      console.log(`Shift clicked: ${clickEvent.item}`);
+      handleShiftPickup(clickEvent.item);
     }
-    // Remove background click handler - users can't create shifts
   };
 
   // Function to update a shift from edit dialog data (modified to only allow pickup)
