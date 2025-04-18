@@ -169,7 +169,8 @@ export const removeShiftFromVehicle = async (vehicleId: string, shiftId: string,
 export const getVehicleAvailability = async (
   vehicleId: string, 
   startDate: string, 
-  endDate: string
+  endDate: string,
+  ignoreShiftId?: string
 ): Promise<{ available: boolean; conflictingShifts: string[] }> => {
   try {
     const vehicleRef = doc(db, 'vehicles', vehicleId);
@@ -178,33 +179,30 @@ export const getVehicleAvailability = async (
     if (!vehicleDoc.exists()) {
       throw new Error(`Vehicle ${vehicleId} does not exist`);
     }
-    
+
     const vehicleData = vehicleDoc.data() as Vehicle;
-    
-    // Check if the vehicle is out of service
+
     if (vehicleData.status === 'Out of Service') {
       return { available: false, conflictingShifts: [] };
     }
-    
-    // Get all assigned shifts for the date range
+
     const assignedShifts = vehicleData.assignedShifts || {};
     const conflictingShifts: string[] = [];
-    
-    // Check each date in the range
+
     const currentDate = new Date(startDate);
     const endDateObj = new Date(endDate);
-    
+
     while (currentDate <= endDateObj) {
       const dateStr = currentDate.toISOString().split('T')[0];
-      
+
       if (assignedShifts[dateStr] && assignedShifts[dateStr].length > 0) {
-        conflictingShifts.push(...assignedShifts[dateStr]);
+        const conflicts = assignedShifts[dateStr].filter(shiftId => shiftId !== ignoreShiftId);
+        conflictingShifts.push(...conflicts);
       }
-      
-      // Move to the next day
+
       currentDate.setDate(currentDate.getDate() + 1);
     }
-    
+
     return {
       available: conflictingShifts.length === 0,
       conflictingShifts
@@ -214,6 +212,7 @@ export const getVehicleAvailability = async (
     throw error;
   }
 };
+
 
 // Get future shifts assigned to a vehicle (for when a vehicle goes out of service)
 export const getFutureShiftsForVehicle = async (vehicleId: string): Promise<{ date: string; shiftIds: string[] }[]> => {

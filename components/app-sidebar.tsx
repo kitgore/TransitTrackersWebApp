@@ -8,11 +8,12 @@ import { doc, getDoc } from 'firebase/firestore';
 import { NavUser } from '@/components/nav-user';
 import Link from 'next/link';
 import {
-  Shield,
+  Settings,
   Calendar,
   BookUser,
   MessageSquare,
   ClipboardList,
+  Bus,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -31,11 +32,11 @@ interface SidebarProps {
 }
 
 const adminOnlyNavigationItems = [
-  { name: 'Schedule Manager', url: '/dashboard-admin', icon: Calendar },
+  { name: 'Schedule', url: '/dashboard-admin', icon: Calendar },
   { name: 'Driver Messaging', url: '/messaging', icon: MessageSquare },
   { name: 'Manage Drivers', url: '/users', icon: BookUser },
-  { name: 'Administrator Panel', url: '/admin', icon: Shield },
-  { name: 'Role Management', url: '/roles', icon: ClipboardList },
+  { name: 'Manage Vehicles', url: '/admin', icon: Bus },
+  { name: 'Manage Roles', url: '/roles', icon: ClipboardList },
 ];
 
 const userOnlyNavigationItems = [
@@ -45,7 +46,7 @@ const userOnlyNavigationItems = [
 ];
 
 const sharedNavigationItems = [
-  { name: 'User Settings', url: '/account', icon: BookUser },
+  { name: 'User Settings', url: '/account', icon: Settings },
 ];
 
 export function AppSidebar({ children }: SidebarProps) {
