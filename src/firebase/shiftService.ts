@@ -338,17 +338,22 @@ export const fetchVehicles = async (): Promise<Vehicle[]> => {
 };
 
 // Check if a vehicle is available for a specific time window
+// Check if a vehicle is available for a specific time window
 export const checkVehicleAvailability = async (
   vehicleId: string, 
   startTimeISO: string, 
-  endTimeISO: string
+  endTimeISO: string,
+  shiftId?: string // pass the shiftId as an argument (optional)
 ): Promise<{ available: boolean; conflictingShifts: string[] }> => {
   try {
     // Extract dates from ISO strings
-    const startDate = startTimeISO.split('T')[0];
-    const endDate = endTimeISO.split('T')[0];
-    
-    return await getVehicleAvailability(vehicleId, startDate, endDate);
+    const startDate = startTimeISO.split('T')[0]; // format as YYYY-MM-DD
+    const endDate = endTimeISO.split('T')[0]; // format as YYYY-MM-DD
+
+    // Pass the shiftId to getVehicleAvailability to avoid conflicts with the shift being edited
+    const result = await getVehicleAvailability(vehicleId, startDate, endDate, shiftId);
+
+    return result; // Return the result
   } catch (error) {
     console.error(`Error checking availability for vehicle ${vehicleId}:`, error);
     throw error;

@@ -384,22 +384,25 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
     const checkAvailability = async () => {
       // Only check if we have a vehicle selected and valid times
       if (
-        (editShiftData.vehicleId) && 
-        ((editShiftData.startTime && editShiftData.endTime))
+        editShiftData.vehicleId && 
+        editShiftData.startTime && 
+        editShiftData.endTime
       ) {
         const vehicleId = editShiftData.vehicleId;
-        const startTime = editShiftData.startTime;
-        const endTime = editShiftData.endTime;
-        
+        const startDate = editShiftData.startTime.toISOString().split('T')[0]; // get date portion
+        const endDate = editShiftData.endTime.toISOString().split('T')[0]; // get date portion
+        const shiftId = editShiftData.id; // pass shift ID to avoid conflict with the current shift
+  
         try {
-          console.log(`Checking availability for vehicle ${vehicleId} from ${startTime.toISOString()} to ${endTime.toISOString()}`);
-          const result = await checkVehicleAvailability(vehicleId, startTime.toISOString(), endTime.toISOString());
+          console.log(`Checking availability for vehicle ${vehicleId} from ${startDate} to ${endDate}`);
+          
+          const result = await checkVehicleAvailability(vehicleId, startDate, endDate, shiftId); // pass shiftId to avoid conflict
           
           setVehicleAvailability(prev => ({
             ...prev,
             [vehicleId]: result
           }));
-          
+  
           if (!result.available) {
             setVehicleError(`Vehicle is not available during this time. It has ${result.conflictingShifts.length} conflicting shift(s).`);
           } else {
@@ -411,13 +414,15 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
         }
       }
     };
-    
+  
     checkAvailability();
   }, [
     editShiftData.vehicleId, 
     editShiftData.startTime, 
-    editShiftData.endTime
+    editShiftData.endTime,
+    editShiftData.id // Ensure the shift ID triggers when it changes
   ]);
+  
   
   // ========== Shift Management Functions ==========
   
@@ -981,13 +986,15 @@ useEffect(() => {
                     className="w-full p-2 border rounded"
                   >
                     <option value="">Select Vehicle</option>
-                    {vehicles.map(vehicle => (
-                      <option key={vehicle.id} value={vehicle.id}>
-                        {vehicle.name} ({vehicle.status})
-                      </option>
+                    {vehicles
+                      .filter(vehicle => vehicle.status === 'Available')
+                      .map(vehicle => (
+                        <option key={vehicle.id} value={vehicle.id}>
+                          {vehicle.name}
+                        </option>
                     ))}
-                  </select>
-                  {vehicleError && <div className="text-red-500 text-sm mt-1">{vehicleError}</div>}
+                    </select>
+                    {vehicleError && <div className="text-red-500 text-sm mt-1">{vehicleError}</div>}
                 </div>
               </div>
               
