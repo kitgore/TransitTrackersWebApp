@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { useAuth } from "@/context/AuthContext";  
 import { useRouter } from 'next/navigation';
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 interface Vehicle {
     id: string;
@@ -182,6 +183,7 @@ export default function AdminPage() {
     }
 
     return (
+       <TooltipProvider>
         <AppSidebar>
             <div className="h-full flex-1 flex-col space-y-8 p-8 md:flex">
                 <div className="flex items-center justify-between space-y-2">
@@ -377,5 +379,6 @@ export default function AdminPage() {
                 </div>
             </div>
         </AppSidebar>
+      </TooltipProvider>
     );
 }

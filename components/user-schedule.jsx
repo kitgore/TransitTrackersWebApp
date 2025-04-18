@@ -904,9 +904,6 @@ useEffect(() => {
               />
             </PopoverContent>
           </Popover>
-          <Button asChild variant="outline">
-            <Link href="/my-shifts">View My Shifts</Link>
-          </Button>
         </div>
         <Button onClick={() => setCurrentDate(prev => new Date(prev.getTime() + 86400000))}>
           Next Day →

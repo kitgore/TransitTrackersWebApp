@@ -13,6 +13,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { 
   fetchShiftsByDate, 
   createShift as createFirebaseShift, 
@@ -1259,7 +1263,33 @@ const handleTimeChange = async (event) => {
         <Button onClick={() => setCurrentDate(prev => new Date(prev.getTime() - 86400000))}>
           ← Previous Day
         </Button>
-        <h1 className="text-2xl font-bold">{formatDateHeader(currentDate)}</h1>
+        <Popover>
+  <PopoverTrigger asChild>
+    <Button
+      variant={"outline"}
+      className={cn(
+        "w-[280px] justify-start text-left font-normal",
+        !currentDate && "text-muted-foreground"
+      )}
+    >
+      <CalendarIcon className="mr-2 h-4 w-4" />
+      <span>{formatDateHeader(currentDate)}</span>
+    </Button>
+  </PopoverTrigger>
+  <PopoverContent className="w-auto p-0">
+    <Calendar
+      mode="single"
+      selected={currentDate}
+      onSelect={(date) => {
+        if (date) {
+          setCurrentDate(date);
+        }
+      }}
+      initialFocus
+    />
+  </PopoverContent>
+</Popover>
+
         <Button onClick={() => setCurrentDate(prev => new Date(prev.getTime() + 86400000))}>
           Next Day →
         </Button>
