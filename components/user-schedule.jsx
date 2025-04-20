@@ -118,12 +118,14 @@ export default function ShiftScheduler() {
     return formatDateForTimeline(date);
   };
   
-  // Format time display in HH:MM format
+  // Format time display in HH:MM AM/PM format
   const formatTimeDisplay = (dateInput) => {
     const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
-    const hours = date.getHours().toString().padStart(2, '0');
+    const hours = date.getHours();
     const minutes = date.getMinutes().toString().padStart(2, '0');
-    return `${hours}:${minutes}`;
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const formattedHours = hours % 12 || 12; // Convert to 12-hour format
+    return `${formattedHours}:${minutes} ${ampm}`;
   };
   
   // Format time input value (HH:MM format for input type="time")
@@ -623,11 +625,12 @@ const [options] = useState({
   timeAxis: { scale: 'hour', step: 1 },
   zoomable: true, // Enable zooming
   moveable: true, // Enable panning
+  verticalScroll: false, // Disable vertical scrolling
   // Add custom format for the time labels to ensure they just show hours
   format: {
     minorLabels: {
-      hour: 'ha', // Format hour labels as "8am", "9am", etc.
-      minute: 'h:mma'
+      hour: 'h a', // Format hour labels as "8 am", "9 am", etc.
+      minute: 'h:mm a'
     }
   },
   // Set row heights to match current filled row height
@@ -638,12 +641,28 @@ const [options] = useState({
 // Update options when currentDate changes
 useEffect(() => {
   if (timelineRef.current) {
+    const now = new Date();
+    const currentHour = now.getHours();
+    
+    // Calculate the start and end times for the 8-hour window
+    let startHour = currentHour - 4; // Center on current time
+    let endHour = currentHour + 4;
+    
+    // Handle edge cases
+    if (startHour < 5) { // If start would be before 5am
+      startHour = 5;
+      endHour = 13; // Show 5am-1pm
+    } else if (endHour > 24) { // If end would be after midnight
+      endHour = 24;
+      startHour = 16; // Show 4pm-midnight
+    }
+    
     const newOptions = {
       ...options,
       min: new Date(new Date(currentDate).setHours(5, 0, 0, 0)),
       max: new Date(new Date(currentDate).setHours(24, 0, 0, 0)),
-      start: new Date(new Date(currentDate).setHours(8, 0, 0, 0)),
-      end: new Date(new Date(currentDate).setHours(16, 0, 0, 0))
+      start: new Date(new Date(currentDate).setHours(startHour, 0, 0, 0)),
+      end: new Date(new Date(currentDate).setHours(endHour, 0, 0, 0))
     };
     timelineRef.current.setOptions(newOptions);
   }
@@ -927,6 +946,17 @@ const getTimelineRef = (ref, itemsDataset, groupsDataset) => {
   timelineRef.current = ref;
   itemsDatasetRef.current = itemsDataset;
   rolesDatasetRef.current = groupsDataset;
+  
+  // Add wheel event listener to prevent vertical scrolling
+  if (ref && ref.dom && ref.dom.root) {
+    const container = ref.dom.root;
+    container.addEventListener('wheel', (e) => {
+      // Only prevent default if it's a vertical scroll
+      if (e.deltaY !== 0) {
+        e.preventDefault();
+      }
+    }, { passive: false });
+  }
   
   // Add click event listener to the timeline
   if (ref) {
