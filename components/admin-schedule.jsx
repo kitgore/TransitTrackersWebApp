@@ -13,6 +13,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { 
   fetchShiftsByDate, 
   createShift as createFirebaseShift, 
@@ -425,24 +429,26 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
   // Check vehicle availability when shift times change
   useEffect(() => {
     const checkAvailability = async () => {
-      // Only check if we have a vehicle selected and valid times
-      if (
-        (newShiftData.vehicleId || editShiftData.vehicleId) && 
-        ((newShiftData.startTime && newShiftData.endTime) || (editShiftData.startTime && editShiftData.endTime))
-      ) {
-        const vehicleId = newShiftData.vehicleId || editShiftData.vehicleId;
-        const startTime = newShiftData.startTime || editShiftData.startTime;
-        const endTime = newShiftData.endTime || editShiftData.endTime;
-        
+      const vehicleId = newShiftData.vehicleId || editShiftData.vehicleId;
+      const startTime = newShiftData.startTime || editShiftData.startTime;
+      const endTime = newShiftData.endTime || editShiftData.endTime;
+      const currentShiftId = editShiftData.id || null; // ⬅️ get current shift ID if editing
+  
+      if (vehicleId && startTime && endTime) {
         try {
           console.log(`Checking availability for vehicle ${vehicleId} from ${startTime.toISOString()} to ${endTime.toISOString()}`);
-          const result = await checkVehicleAvailability(vehicleId, startTime.toISOString(), endTime.toISOString());
-          
+          const result = await checkVehicleAvailability(
+            vehicleId,
+            startTime.toISOString(),
+            endTime.toISOString(),
+            editShiftData.id // Pass the shift ID to avoid conflicts with the current shift
+          );
+  
           setVehicleAvailability(prev => ({
             ...prev,
             [vehicleId]: result
           }));
-          
+  
           if (!result.available) {
             setVehicleError(`Vehicle is not available during this time. It has ${result.conflictingShifts.length} conflicting shift(s).`);
           } else {
@@ -454,7 +460,7 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
         }
       }
     };
-    
+  
     checkAvailability();
   }, [
     newShiftData.vehicleId, 
@@ -462,8 +468,10 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
     newShiftData.endTime,
     editShiftData.vehicleId,
     editShiftData.startTime,
-    editShiftData.endTime
+    editShiftData.endTime,
+    editShiftData.id // ⬅️ add this so useEffect triggers when ID changes
   ]);
+  
   
   // ========== Shift Management Functions ==========
   
@@ -1340,7 +1348,33 @@ useEffect(() => {
         <Button onClick={() => setCurrentDate(prev => new Date(prev.getTime() - 86400000))}>
           ← Previous Day
         </Button>
-        <h1 className="text-2xl font-bold">{formatDateHeader(currentDate)}</h1>
+        <Popover>
+  <PopoverTrigger asChild>
+    <Button
+      variant={"outline"}
+      className={cn(
+        "w-[280px] justify-start text-left font-normal",
+        !currentDate && "text-muted-foreground"
+      )}
+    >
+      <CalendarIcon className="mr-2 h-4 w-4" />
+      <span>{formatDateHeader(currentDate)}</span>
+    </Button>
+  </PopoverTrigger>
+  <PopoverContent className="w-auto p-0">
+    <Calendar
+      mode="single"
+      selected={currentDate}
+      onSelect={(date) => {
+        if (date) {
+          setCurrentDate(date);
+        }
+      }}
+      initialFocus
+    />
+  </PopoverContent>
+</Popover>
+
         <Button onClick={() => setCurrentDate(prev => new Date(prev.getTime() + 86400000))}>
           Next Day →
         </Button>
@@ -1412,13 +1446,15 @@ useEffect(() => {
                   className="w-full p-2 border rounded"
                 >
                   <option value="">Select Vehicle</option>
-                  {vehicles.map(vehicle => (
-                    <option key={vehicle.id} value={vehicle.id}>
-                      {vehicle.name} ({vehicle.status})
-                    </option>
+                  {vehicles
+                    .filter(vehicle => vehicle.status === 'Available')
+                    .map(vehicle => (
+                      <option key={vehicle.id} value={vehicle.id}>
+                        {vehicle.name}
+                      </option>
                   ))}
-                </select>
-                {vehicleError && <div className="text-red-500 text-sm mt-1">{vehicleError}</div>}
+                  </select>
+                  {vehicleError && <div className="text-red-500 text-sm mt-1">{vehicleError}</div>}
               </div>
             </div>
             
@@ -1446,25 +1482,6 @@ useEffect(() => {
                 onChange={handleEndTimeChange}
                 className="col-span-3"
               />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label className="text-right">
-              Repeat
-            </Label>
-            <div className="col-span-3 flex flex-wrap gap-2">
-              {['M', 'T', 'W', 'Th', 'F', 'Sa', 'Su'].map((day) => (
-                <label key={day} className="flex items-center space-x-1">
-                  <input
-                    type="checkbox"
-                    checked={!!repeatDays[day]} // Use !! to force boolean
-                    onChange={() => toggleRepeatDay(day)}
-                    className="accent-blue-600"
-                  />
-                  <span>{day}</span>
-                </label>
-              ))}
             </div>
           </div>
           
@@ -1536,13 +1553,15 @@ useEffect(() => {
                     className="w-full p-2 border rounded"
                   >
                     <option value="">Select Vehicle</option>
-                    {vehicles.map(vehicle => (
-                      <option key={vehicle.id} value={vehicle.id}>
-                        {vehicle.name} ({vehicle.status})
-                      </option>
+                    {vehicles
+                      .filter(vehicle => vehicle.status === 'Available')
+                      .map(vehicle => (
+                        <option key={vehicle.id} value={vehicle.id}>
+                          {vehicle.name}
+                        </option>
                     ))}
-                  </select>
-                  {vehicleError && <div className="text-red-500 text-sm mt-1">{vehicleError}</div>}
+                    </select>
+                    {vehicleError && <div className="text-red-500 text-sm mt-1">{vehicleError}</div>}
                 </div>
               </div>
               
@@ -1571,26 +1590,6 @@ useEffect(() => {
                   className="col-span-3"
                 />
               </div>
-
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right">
-                  Repeat
-                </Label>
-                <div className="col-span-3 flex flex-wrap gap-2">
-                  {['M', 'T', 'W', 'Th', 'F', 'Sa', 'Su'].map((day) => (
-                    <label key={day} className="flex items-center space-x-1">
-                      <input
-                        type="checkbox"
-                        checked={!!editRepeatDays[day]}
-                        onChange={() => toggleEditRepeatDay(day)}
-                        className="accent-blue-600"
-                      />
-                      <span>{day}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
 
             </div>
           ) : (
