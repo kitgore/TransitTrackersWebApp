@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar as CalendarIcon } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { 
   fetchShiftsByDate, 
@@ -204,7 +204,11 @@ export default function ShiftScheduler() {
   // Format date for Firebase queries and display
   const formatDate = (date, format) => {
     if (format === DATE_FORMATS.ISO) {
-      return date.toISOString().split('T')[0];
+      // Convert to local date string in YYYY-MM-DD format
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
     } else {
       const options = { 
         weekday: 'long', 
@@ -1344,39 +1348,38 @@ useEffect(() => {
   return (
     <div className="container mx-auto p-4">
 
-      <div className="flex justify-between items-center mb-2">
-        <Button onClick={() => setCurrentDate(prev => new Date(prev.getTime() - 86400000))}>
-          ← Previous Day
+      <div className="flex items-center gap-2 mb-2">
+        <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setCurrentDate(prev => new Date(prev.getTime() - 86400000))}>
+          <ChevronLeft className="h-6 w-6" />
         </Button>
         <Popover>
-  <PopoverTrigger asChild>
-    <Button
-      variant={"outline"}
-      className={cn(
-        "w-[280px] justify-start text-left font-normal",
-        !currentDate && "text-muted-foreground"
-      )}
-    >
-      <CalendarIcon className="mr-2 h-4 w-4" />
-      <span>{formatDateHeader(currentDate)}</span>
-    </Button>
-  </PopoverTrigger>
-  <PopoverContent className="w-auto p-0">
-    <Calendar
-      mode="single"
-      selected={currentDate}
-      onSelect={(date) => {
-        if (date) {
-          setCurrentDate(date);
-        }
-      }}
-      initialFocus
-    />
-  </PopoverContent>
-</Popover>
-
-        <Button onClick={() => setCurrentDate(prev => new Date(prev.getTime() + 86400000))}>
-          Next Day →
+          <PopoverTrigger asChild>
+            <Button
+              variant={"outline"}
+              className={cn(
+                "w-[280px] h-10 justify-start text-left font-normal",
+                !currentDate && "text-muted-foreground"
+              )}
+            >
+              <CalendarIcon className="mr-2 h-5 w-5" />
+              <span>{formatDateHeader(currentDate)}</span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0">
+            <Calendar
+              mode="single"
+              selected={currentDate}
+              onSelect={(date) => {
+                if (date) {
+                  setCurrentDate(date);
+                }
+              }}
+              initialFocus
+            />
+          </PopoverContent>
+        </Popover>
+        <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setCurrentDate(prev => new Date(prev.getTime() + 86400000))}>
+          <ChevronRight className="h-6 w-6" />
         </Button>
       </div>
       
