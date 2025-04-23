@@ -148,6 +148,36 @@ export default function ShiftScheduler() {
   // State for shifts - start with empty array
   const [shifts, setShifts] = useState([]);
   
+  // Timeline options with fixed window
+  const [options, setOptions] = useState({
+    min: new Date(new Date(currentDate).setHours(5, 0, 0, 0)),  // scrollable lower bound
+    max: new Date(new Date(currentDate).setHours(24, 0, 0, 0)), // scrollable upper bound
+    editable: true,
+    selectable: true,
+    margin: {
+      item: {
+        horizontal: 0,
+      }
+    },
+    // Set showMajorLabels to false to hide the date headers
+    showMajorLabels: false,
+    showMinorLabels: true,
+    orientation: 'top',
+    timeAxis: { scale: 'hour', step: 1 },
+    zoomable: true, // Enable zooming
+    moveable: true, // Enable panning
+    verticalScroll: false, // Disable vertical scrolling
+    // Add custom format for the time labels to ensure they just show hours
+    format: {
+      minorLabels: {
+        hour: 'h a', // Format hour labels as "8 am", "9 am", etc.
+        minute: 'h:mm a'
+      }
+    },
+    // Set row heights to match current filled row height
+    groupHeightMode: 'fixed',
+  });
+
   // Reference to track resize state
   const isResizingRef = useRef(false);
   
@@ -526,183 +556,210 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
     };
   };
 
-  
-// Initialize shifts with consistent date format after component mounts
-useEffect(() => {
+  // Initialize shifts with consistent date format after component mounts
+  useEffect(() => {
+    console.log("USE EFFECT CALLED");
+    let lastFetchTime = 0;
+    
+    const loadShifts = async () => {
+      if (roles.length === 0) return; // Wait until roles are loaded
 
-  console.log("USE EFFECT CALLED");
-  let lastFetchTime = 0;
-  
-  const loadShifts = async () => {
-    if (roles.length === 0) return; // Wait until roles are loaded
+      const now = Date.now();
+      if (now - lastFetchTime < 5000) {
+        return;
+      }
+      lastFetchTime = now;
 
-    const now = Date.now();
-    if (now - lastFetchTime < 5000) {
-      return;
-    }
-    lastFetchTime = now;
-
-    try {
-      const dateISO = formatDate(currentDate, DATE_FORMATS.ISO);
-      console.log(`Fetching shifts for date: ${dateISO}`);
-      
-      const firebaseShifts = await fetchShiftsFromFirebase();
-      
-      if (firebaseShifts.length > 0) {
-        console.log('Loaded shifts from Firebase:', firebaseShifts);
+      try {
+        const dateISO = formatDate(currentDate, DATE_FORMATS.ISO);
+        console.log(`Fetching shifts for date: ${dateISO}`);
         
-        // Format the shifts for the timeline
-        const formattedShifts = firebaseShifts.map(shift => {
-          console.log('📊 Processing shift from Firebase:', {
-            id: shift.id,
-            startTimeISO: shift.startTimeISO,
-            endTimeISO: shift.endTimeISO,
-            startTimeISOType: typeof shift.startTimeISO,
-            endTimeISOType: typeof shift.endTimeISO
-          });
+        // Clear existing shifts from both state and timeline dataset
+        setShifts([]);
+        if (itemsDatasetRef.current) {
+          itemsDatasetRef.current.clear();
+        }
+        
+        const firebaseShifts = await fetchShiftsFromFirebase();
+        
+        if (firebaseShifts.length > 0) {
+          console.log('Loaded shifts from Firebase:', firebaseShifts);
           
-          // Check if the role exists
-          const roleExists = roles.some(r => r.id === shift.role);
-          if (!roleExists) {
-            console.warn(`Shift ${shift.id} references invalid role ${shift.role}, skipping, existing roles:`, roles.map(r => r.id));
-            return null;
-          }
-          
-          try {
-            // Convert Firestore Timestamp to Date if needed
-            let startDate, endDate;
+          // Format the shifts for the timeline
+          const formattedShifts = firebaseShifts.map(shift => {
+            console.log('📊 Processing shift from Firebase:', {
+              id: shift.id,
+              startTimeISO: shift.startTimeISO,
+              endTimeISO: shift.endTimeISO,
+              startTimeISOType: typeof shift.startTimeISO,
+              endTimeISOType: typeof shift.endTimeISO
+            });
             
-            if (shift.startTimeISO && typeof shift.startTimeISO === 'object' && 'seconds' in shift.startTimeISO) {
-              // This is a Firestore Timestamp
-              startDate = new Date(shift.startTimeISO.seconds * 1000);
-            } else {
-              startDate = new Date(shift.startTimeISO);
-            }
-            
-            if (shift.endTimeISO && typeof shift.endTimeISO === 'object' && 'seconds' in shift.endTimeISO) {
-              // This is a Firestore Timestamp
-              endDate = new Date(shift.endTimeISO.seconds * 1000);
-            } else {
-              endDate = new Date(shift.endTimeISO);
-            }
-            
-            if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-              console.error('Invalid dates in shift:', shift);
+            // Check if the role exists
+            const roleExists = roles.some(r => r.id === shift.role);
+            if (!roleExists) {
+              console.warn(`Shift ${shift.id} references invalid role ${shift.role}, skipping, existing roles:`, roles.map(r => r.id));
               return null;
             }
             
-            // Create a timeline item using Firebase's document ID as the primary ID
-            const formattedShift = {
-              ...shift,
-              // Essential timeline properties
-              id: shift.id, // This is the Firebase document ID
-              group: shift.role, // Map role to group for vis-timeline
-              content: `${shift.name} | ${shift.startTimeFormatted}-${shift.endTimeFormatted}`,
-              start: startDate.toISOString(),
-              end: endDate.toISOString(),
-              className: shift.status === SHIFT_STATUS.AVAILABLE ? 'shift-item available-shift' : 'shift-item',
+            try {
+              // Convert Firestore Timestamp to Date if needed
+              let startDate, endDate;
               
-              // Make sure we always have a date
-              date: shift.date || dateISO,
-            };
+              if (shift.startTimeISO && typeof shift.startTimeISO === 'object' && 'seconds' in shift.startTimeISO) {
+                // This is a Firestore Timestamp
+                startDate = new Date(shift.startTimeISO.seconds * 1000);
+              } else {
+                startDate = new Date(shift.startTimeISO);
+              }
+              
+              if (shift.endTimeISO && typeof shift.endTimeISO === 'object' && 'seconds' in shift.endTimeISO) {
+                // This is a Firestore Timestamp
+                endDate = new Date(shift.endTimeISO.seconds * 1000);
+              } else {
+                endDate = new Date(shift.endTimeISO);
+              }
+              
+              if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+                console.error('Invalid dates in shift:', shift);
+                return null;
+              }
+              
+              // Create a timeline item using Firebase's document ID as the primary ID
+              const formattedShift = {
+                ...shift,
+                // Essential timeline properties
+                id: shift.id, // This is the Firebase document ID
+                group: shift.role, // Map role to group for vis-timeline
+                content: `${shift.name} | ${shift.startTimeFormatted}-${shift.endTimeFormatted}`,
+                start: startDate.toISOString(),
+                end: endDate.toISOString(),
+                className: shift.status === SHIFT_STATUS.AVAILABLE ? 'shift-item available-shift' : 'shift-item',
+                
+                // Make sure we always have a date
+                date: shift.date || dateISO,
+              };
+              
+              console.log('✅ Formatted shift:', {
+                id: formattedShift.id,
+                start: formattedShift.start,
+                end: formattedShift.end,
+                startType: typeof formattedShift.start,
+                endType: typeof formattedShift.end
+              });
+              
+              return formattedShift;
+            } catch (err) {
+              console.error(`Error formatting shift ${shift.id}:`, err);
+              return null;
+            }
+          }).filter(shift => shift !== null); // Filter out null entries
+          
+          // Debug the formatted shifts
+          console.log('Formatted shifts with IDs:', formattedShifts.map(s => ({ 
+            id: s.id,
+            content: s.content
+          })));
+          
+          setShifts(formattedShifts);
+          
+          // Update the timeline dataset if available
+          if (itemsDatasetRef.current) {
+            console.log('Updating timeline dataset with new shifts');
+            // Clear the dataset first to ensure no old shifts remain
+            itemsDatasetRef.current.clear();
+            // Add the new shifts
+            itemsDatasetRef.current.add(formattedShifts);
             
-            console.log('✅ Formatted shift:', {
-              id: formattedShift.id,
-              start: formattedShift.start,
-              end: formattedShift.end,
-              startType: typeof formattedShift.start,
-              endType: typeof formattedShift.end
-            });
-            
-            return formattedShift;
-          } catch (err) {
-            console.error(`Error formatting shift ${shift.id}:`, err);
-            return null;
+            if (timelineRef.current) {
+              console.log('Forcing timeline redraw after dataset update');
+              timelineRef.current.redraw();
+            }
           }
-        }).filter(shift => shift !== null); // Filter out null entries
-        
-        // Debug the formatted shifts
-        console.log('Formatted shifts with IDs:', formattedShifts.map(s => ({ 
-          id: s.id,
-          content: s.content
-        })));
-        
-        setShifts(formattedShifts);
-      } else {
-        console.log('No shifts found in Firebase');
+        } else {
+          console.log('No shifts found in Firebase');
+          setShifts([]);
+          if (itemsDatasetRef.current) {
+            itemsDatasetRef.current.clear();
+          }
+        }
+      } catch (error) {
+        console.error('Error loading shifts:', error);
         setShifts([]);
+        if (itemsDatasetRef.current) {
+          itemsDatasetRef.current.clear();
+        }
       }
-    } catch (error) {
-      console.error('Error loading shifts:', error);
-      setShifts([]);
-    }
-  };
-  
-  if (roles.length > 0) {
-    loadShifts();
-  }
- 
-}, [fetchShiftsFromFirebase, roles, currentDate]);
-  
-// Timeline options with fixed window
-const [options] = useState({
-  min: new Date(new Date(currentDate).setHours(5, 0, 0, 0)),  // scrollable lower bound
-  max: new Date(new Date(currentDate).setHours(24, 0, 0, 0)), // scrollable upper bound
-  editable: true,
-  selectable: true,
-  margin: {
-    item: {
-      horizontal: 0,
-    }
-  },
-  // Set showMajorLabels to false to hide the date headers
-  showMajorLabels: false,
-  showMinorLabels: true,
-  orientation: 'top',
-  timeAxis: { scale: 'hour', step: 1 },
-  zoomable: true, // Enable zooming
-  moveable: true, // Enable panning
-  verticalScroll: false, // Disable vertical scrolling
-  // Add custom format for the time labels to ensure they just show hours
-  format: {
-    minorLabels: {
-      hour: 'h a', // Format hour labels as "8 am", "9 am", etc.
-      minute: 'h:mm a'
-    }
-  },
-  // Set row heights to match current filled row height
-  groupHeightMode: 'fixed',
-});
-
-// Update options when currentDate changes
-useEffect(() => {
-  if (timelineRef.current) {
-    const now = new Date();
-    const currentHour = now.getHours();
-    
-    // Calculate the start and end times for the 8-hour window
-    let startHour = currentHour - 4; // Center on current time
-    let endHour = currentHour + 4;
-    
-    // Handle edge cases
-    if (startHour < 5) { // If start would be before 5am
-      startHour = 5;
-      endHour = 13; // Show 5am-1pm
-    } else if (endHour > 24) { // If end would be after midnight
-      endHour = 24;
-      startHour = 16; // Show 4pm-midnight
-    }
-    
-    const newOptions = {
-      ...options,
-      min: new Date(new Date(currentDate).setHours(5, 0, 0, 0)),
-      max: new Date(new Date(currentDate).setHours(24, 0, 0, 0)),
-      start: new Date(new Date(currentDate).setHours(startHour, 0, 0, 0)),
-      end: new Date(new Date(currentDate).setHours(endHour, 0, 0, 0))
     };
-    timelineRef.current.setOptions(newOptions);
-  }
-}, [currentDate, options]);
+    
+    if (roles.length > 0) {
+      loadShifts();
+    }
+  }, [fetchShiftsFromFirebase, roles, currentDate]);
+
+  // Force timeline reinitialization when data is ready
+  useEffect(() => {
+    if (timelineRef.current) {
+      console.log('Timeline reinitialization effect triggered', {
+        shifts: shifts.length,
+        roles: roles.length,
+        currentDate: currentDate
+      });
+      
+      const initializeTimeline = () => {
+        if (timelineRef.current && timelineRef.current.dom && timelineRef.current.dom.root) {
+          console.log('Forcing timeline redraw');
+          const container = timelineRef.current.dom.root;
+          const height = container.clientHeight;
+          const width = container.clientWidth;
+          
+          // Force container resize
+          container.style.height = `${height}px`;
+          container.style.width = `${width}px`;
+          
+          // Set options and redraw
+          timelineRef.current.setOptions(options);
+          timelineRef.current.redraw();
+        } else {
+          console.log('Timeline DOM not ready, retrying in 100ms');
+          setTimeout(initializeTimeline, 100);
+        }
+      };
+      
+      initializeTimeline();
+    }
+  }, [shifts, roles, currentDate, options]);
+
+  // Update options when currentDate changes
+  useEffect(() => {
+    if (timelineRef.current) {
+      const now = new Date();
+      const currentHour = now.getHours();
+      
+      // Calculate the start and end times for the 8-hour window
+      let startHour = currentHour - 4; // Center on current time
+      let endHour = currentHour + 4;
+      
+      // Handle edge cases
+      if (startHour < 5) { // If start would be before 5am
+        startHour = 5;
+        endHour = 13; // Show 5am-1pm
+      } else if (endHour > 24) { // If end would be after midnight
+        endHour = 24;
+        startHour = 16; // Show 4pm-midnight
+      }
+      
+      const newOptions = {
+        ...options,
+        min: new Date(new Date(currentDate).setHours(5, 0, 0, 0)),
+        max: new Date(new Date(currentDate).setHours(24, 0, 0, 0)),
+        start: new Date(new Date(currentDate).setHours(startHour, 0, 0, 0)),
+        end: new Date(new Date(currentDate).setHours(endHour, 0, 0, 0))
+      };
+      setOptions(newOptions);
+      timelineRef.current.setOptions(newOptions);
+    }
+  }, [currentDate]);
 
   // ========== Event Handlers ==========
   
