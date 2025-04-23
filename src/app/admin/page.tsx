@@ -13,6 +13,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { useAuth } from "@/context/AuthContext";  
 import { useRouter } from 'next/navigation';
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Switch } from '@/components/ui/switch';
 
 interface Vehicle {
     id: string;
@@ -21,6 +22,7 @@ interface Vehicle {
     licensePlate: string;
     status: string;
     note?: string;
+    adaAccessible?: boolean;
 }
 
 export default function AdminPage() {
@@ -36,6 +38,7 @@ export default function AdminPage() {
     const [vehicleName, setVehicleName] = useState<string>("");
     const [vin, setVin] = useState<string>("");
     const [licensePlate, setLicensePlate] = useState<string>("");
+    const [isAdaAccessible, setIsAdaAccessible] = useState(false);
 
     const [vehicleToRemove, setVehicleToRemove] = useState<Vehicle | null>(null);
     const [plateInput, setPlateInput] = useState<string>("");
@@ -50,7 +53,8 @@ export default function AdminPage() {
             vin: doc.data().vin || "",
             licensePlate: doc.data().licensePlate || "",
             status: doc.data().status || "Available",
-            note: doc.data().note || ""
+            note: doc.data().note || "",
+            adaAccessible: doc.data().adaAccessible ?? false // default to false if undefined
         }));
         setVehicles(vehicleList);
     }, [user]);
@@ -85,7 +89,8 @@ export default function AdminPage() {
             vin,
             licensePlate,
             status: "Available",
-            note: ""
+            note: "",
+            adaAccessible: isAdaAccessible
         };
 
         try {
@@ -95,6 +100,7 @@ export default function AdminPage() {
             setVehicleName("");
             setVin("");
             setLicensePlate("");
+            setIsAdaAccessible(false);
 
             // Refresh the vehicle list
             fetchVehicles();
@@ -187,12 +193,12 @@ export default function AdminPage() {
         <AppSidebar>
             <div className="h-full flex-1 flex-col space-y-8 p-8 md:flex">
                 <div className="flex items-center justify-between space-y-2">
-                    <h2 className="text-2xl font-bold tracking-tight">Vehicles</h2>
+                    <h2 className="text-2xl font-bold tracking-tight">Manage Vehicles</h2>
                 </div>
 
                 <div className="flex space-x-8">
                     <div className="w-1/2 rounded-md border">
-                        <div className="flex bg-gray-100 font-bold p-3 px-12 border-b">Vehicle List</div>
+                        <div className="flex bg-gray-100 font-bold p-3 px-12 border-b">Vehicle Details & Status</div>
 
                         <ScrollArea className="h-[500px] w-full">
                             <div className="space-y-0">
@@ -221,7 +227,6 @@ export default function AdminPage() {
                                                                 <SelectValue placeholder="Select Status" />
                                                             </SelectTrigger>
                                                             <SelectContent>
-                                                                <SelectItem value="In Use">In Use</SelectItem>
                                                                 <SelectItem value="Available">Available</SelectItem>
                                                                 <SelectItem value="Out of Service">Out of Service</SelectItem>
                                                             </SelectContent>
@@ -241,7 +246,24 @@ export default function AdminPage() {
                                                 )}
                                             </Popover>
                                         </div>
-                                        <div className="w-1/5 text-center">{vehicle.name}</div>
+
+                                        <div className="w-1/5 text-center">
+                                                <Popover>
+                                                    <PopoverTrigger asChild>
+                                                    <Button  
+                                                            className="bg-gray-200 text-black px-6 py-2 text-sm font-small hover:bg-black hover:text-white"
+                                                        >{vehicle.name}</Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-80 p-4 space-y-3">
+                                                        <h4 className="text-lg font-bold mb-2">Vehicle Details</h4>
+                                                        <div>Name: {vehicle.name}</div>
+                                                        <div>License Plate: {vehicle.licensePlate}</div>
+                                                        <div>VIN: {vehicle.vin}</div>
+                                                        <div>ADA Accessible: {vehicle.adaAccessible ? "Yes" : "No"}</div>
+                                                    </PopoverContent>
+                                                </Popover>
+                                        </div>
+
                                         <div className="w-2/5 text-right px-6">
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
@@ -306,6 +328,14 @@ export default function AdminPage() {
                                         </Button>
                                     </div>
                                 </div>
+
+                                <div className="flex space-x-4">
+                                    <Switch
+                                        checked={isAdaAccessible}
+                                        onCheckedChange={setIsAdaAccessible}/>
+                                    <label className="text-sm font-medium">This Vhicle is ADA Accessible:</label>
+                                </div>
+                                
                             </div>
                         </div>
 
