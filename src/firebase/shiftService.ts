@@ -71,20 +71,67 @@ const getShiftsCollection = (date: string) => {
 // Fetch shifts for a specific date
 export const fetchShiftsByDate = async (date: string): Promise<Shift[]> => {
   try {
-    const shiftsCollection = getShiftsCollection(date);
-    const snapshot = await getDocs(shiftsCollection);
+    // Get the date in local timezone
+    const localDate = new Date(date);
+    const localDateStr = localDate.toLocaleDateString('en-CA'); // YYYY-MM-DD format
     
-    return snapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        ...data,
-        id: doc.id,
-        firestoreId: doc.id,
-        date: date,
-        createdAt: data.createdAt?.toDate(),
-        updatedAt: data.updatedAt?.toDate()
-      } as Shift;
+    // Get the previous day in local timezone
+    const prevDate = new Date(localDate);
+    prevDate.setDate(prevDate.getDate() - 1);
+    const prevDateStr = prevDate.toLocaleDateString('en-CA');
+    
+    console.log(`Fetching shifts for dates: ${prevDateStr} and ${localDateStr}`);
+    
+    // Fetch shifts for both days
+    const [prevDayShifts, currentDayShifts] = await Promise.all([
+      getDocs(getShiftsCollection(prevDateStr)),
+      getDocs(getShiftsCollection(localDateStr))
+    ]);
+    
+    // Combine and process all shifts
+    const allShifts = [
+      ...prevDayShifts.docs.map(doc => {
+        const data = doc.data() as Omit<Shift, 'id' | 'firestoreId' | 'date' | 'createdAt' | 'updatedAt'>;
+        return {
+          ...data,
+          id: doc.id,
+          firestoreId: doc.id,
+          date: prevDateStr,
+          createdAt: doc.data().createdAt?.toDate(),
+          updatedAt: doc.data().updatedAt?.toDate()
+        } as Shift;
+      }),
+      ...currentDayShifts.docs.map(doc => {
+        const data = doc.data() as Omit<Shift, 'id' | 'firestoreId' | 'date' | 'createdAt' | 'updatedAt'>;
+        return {
+          ...data,
+          id: doc.id,
+          firestoreId: doc.id,
+          date: localDateStr,
+          createdAt: doc.data().createdAt?.toDate(),
+          updatedAt: doc.data().updatedAt?.toDate()
+        } as Shift;
+      })
+    ];
+    
+    // Filter shifts to only include those that overlap with the local date
+    const filteredShifts = allShifts.filter(shift => {
+      const shiftStart = new Date(shift.startTimeISO);
+      const shiftEnd = new Date(shift.endTimeISO);
+      
+      // Convert to local timezone
+      const localShiftStart = new Date(shiftStart.toLocaleString());
+      const localShiftEnd = new Date(shiftEnd.toLocaleString());
+      
+      // Check if shift overlaps with the local date
+      return (
+        (localShiftStart.toLocaleDateString('en-CA') === localDateStr) ||
+        (localShiftEnd.toLocaleDateString('en-CA') === localDateStr)
+      );
     });
+    
+    console.log(`Found ${filteredShifts.length} shifts for local date ${localDateStr}`);
+    return filteredShifts;
   } catch (error) {
     console.error(`Error fetching shifts for date ${date}:`, error);
     throw error;
