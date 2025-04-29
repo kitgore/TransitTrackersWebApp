@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import GanttTimeline from '@/components/vis-timeline'; // Adjust path as needed
+import GanttTimeline from '@/components/vis-timeline';
 import {
   Dialog,
   DialogContent,
@@ -30,32 +30,35 @@ import {
   removeVehicleFromShift,
   updateShiftWithVehicle
 } from '@/src/firebase/shiftService';
-
-// Constants for shift status
-const SHIFT_STATUS = {
-  AVAILABLE: 'AVAILABLE',
-  ASSIGNED: 'ASSIGNED',
-  PENDING: 'PENDING',
-};
-
-// Constants for date formatting
-const DATE_FORMATS = {
-  ISO: 'iso',
-  DISPLAY: 'display',
-};
+import { useBaseSchedule, SHIFT_STATUS, DATE_FORMATS } from './base-schedule';
 
 export default function ShiftScheduler() {
-  // Reference to timeline for event handling
-  const timelineRef = useRef(null);
-  const containerRef = useRef(null);
-  
-  // Reference to the timeline's internal datasets
-  const itemsDatasetRef = useRef(null);
-  const rolesDatasetRef = useRef(null);
-  
-  // Get today's date for creating the sample data
-  const [currentDate, setCurrentDate] = useState(() => new Date());
-  
+  // Get base functionality from useBaseSchedule hook
+  const {
+    timelineRef,
+    containerRef,
+    itemsDatasetRef,
+    rolesDatasetRef,
+    currentDate,
+    setCurrentDate,
+    roles,
+    setRoles,
+    users,
+    setUsers,
+    shifts,
+    setShifts,
+    options,
+    setOptions,
+    getTimelineRef,
+    formatDate,
+    getRoleNameById,
+    formatTimeInput,
+    isShiftAvailable,
+    formatDateHeader,
+    formatTimeForTitle,
+    getRoleDisplayName
+  } = useBaseSchedule();
+
   // Track click information
   const lastClickRef = useRef({
     time: 0,
@@ -125,14 +128,6 @@ export default function ShiftScheduler() {
   const toggleEditRepeatDay = (day) => {
     setEditRepeatDays(prev => ({ ...prev, [day]: !prev[day] }));
   };
-
-  // State for roles and users
-  const [roles, setRoles] = useState([
-      { id: 'default', content: 'Loading Roles...' }
-  ]);
-  
-  // State for users
-  const [users, setUsers] = useState([]);
   
   // State for vehicles
   const [vehicles, setVehicles] = useState([]);
@@ -145,39 +140,6 @@ export default function ShiftScheduler() {
 
   const colors = { bg: '#18181b', border: '#18181b' };
   
-  // State for shifts - start with empty array
-  const [shifts, setShifts] = useState([]);
-  
-  // Timeline options with fixed window
-  const [options, setOptions] = useState({
-    min: new Date(new Date(currentDate).setHours(5, 0, 0, 0)),  // scrollable lower bound
-    max: new Date(new Date(currentDate).setHours(24, 0, 0, 0)), // scrollable upper bound
-    editable: true,
-    selectable: true,
-    margin: {
-      item: {
-        horizontal: 0,
-      }
-    },
-    // Set showMajorLabels to false to hide the date headers
-    showMajorLabels: false,
-    showMinorLabels: true,
-    orientation: 'top',
-    timeAxis: { scale: 'hour', step: 1 },
-    zoomable: true, // Enable zooming
-    moveable: true, // Enable panning
-    verticalScroll: false, // Disable vertical scrolling
-    // Add custom format for the time labels to ensure they just show hours
-    format: {
-      minorLabels: {
-        hour: 'h a', // Format hour labels as "8 am", "9 am", etc.
-        minute: 'h:mm a'
-      }
-    },
-    // Set row heights to match current filled row height
-    groupHeightMode: 'fixed',
-  });
-
   // Reference to track resize state
   const isResizingRef = useRef(false);
   
@@ -190,119 +152,9 @@ export default function ShiftScheduler() {
     up: null,
     move: null
   });
-  
-  // ========== Utility Functions ==========
-  
-  // Format date consistently - this is critical!
-  const formatDateForTimeline = (date) => {
-    return date.toISOString(); // Always use ISO string with timezone
-  };
-  
-  // Create a date at a specific hour
-  const createDateAtHour = (hour, minutes = 0) => {
-    const date = new Date(currentDate);
-    date.setHours(hour, minutes, 0, 0);
-    return formatDateForTimeline(date);
-  };
-  
-  // Format time display in HH:MM AM/PM format
-  const formatTimeDisplay = (dateInput) => {
-    const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
-    const hours = date.getHours();
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    const formattedHours = hours % 12 || 12; // Convert to 12-hour format
-    return `${formattedHours}:${minutes} ${ampm}`;
-  };
-  
-  // Format time input value (HH:MM format for input type="time")
-  const formatTimeInput = (dateInput) => {
-    const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    return `${hours}:${minutes}`;
-  };
-  
-  // Parse time input value
-  const parseTimeInput = (timeStr, baseDate) => {
-    const [hours, minutes] = timeStr.split(':').map(Number);
-    const date = new Date(baseDate);
-    date.setHours(hours, minutes, 0, 0);
-    return date;
-  };
 
-  // Format date for Firebase queries and display
-  const formatDate = (date, format) => {
-    if (format === DATE_FORMATS.ISO) {
-      // Convert to local date string in YYYY-MM-DD format
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    } else {
-      const options = { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      };
-      return date.toLocaleDateString('en-US', options);
-    }
-  };
-  
-  // Format date header
-  const formatDateHeader = (date) => {
-    return formatDate(date, DATE_FORMATS.DISPLAY);
-  };
-  
-  // Function to determine if a shift is available
-  const isShiftAvailable = (name) => {
-    return name.toUpperCase() === SHIFT_STATUS.AVAILABLE;
-  };
-  
-  // Get role name by ID
-  const getRoleNameById = (roleId) => {
-    console.log('🔍 Looking up role name for ID:', roleId);
-    console.log('Available roles:', roles);
-    const role = roles.find(r => r.id === roleId);
-    console.log('Found role:', role);
-    return role ? role.content : roleId;
-  };
-
-  // Get role name for display
-  const getRoleDisplayName = (shift) => {
-    console.log('📋 Getting role display name for shift:', shift);
-    if (!shift) {
-      console.log('❌ No shift provided');
-      return '';
-    }
-    // First try to use the roleName from the shift data
-    if (shift.roleName) {
-      console.log('✅ Using shift.roleName:', shift.roleName);
-      return shift.roleName;
-    }
-    // Fallback to looking up the role name
-    console.log('🔄 Falling back to role lookup for role:', shift.role);
-    return getRoleNameById(shift.role);
-  };
-
-  // Format time for dialog title
-  const formatTimeForTitle = (date) => {
-    if (!date) return '';
-    const hours = date.getHours();
-    const minutes = date.getMinutes();
-    const ampm = hours >= 12 ? 'pm' : 'am';
-    const formattedHours = hours % 12 || 12;
-    return `${formattedHours}:${minutes.toString().padStart(2, '0')} ${ampm}`;
-  };
-
-  // update the date when currentDate changes
-  useEffect(() => {
-    if (!timelineRef.current) return;
-    const min = new Date(new Date(currentDate).setHours(5, 0, 0, 0));
-    const max = new Date(new Date(currentDate).setHours(24, 0, 0, 0));
-    timelineRef.current.setWindow(min, max, { animation: false });
-  }, [currentDate]);
+  // Add a ref to track the last loaded date
+  const lastLoadedDateRef = useRef(null);
 
   // ========== Firebase Integration Functions ==========
   
@@ -325,7 +177,7 @@ export default function ShiftScheduler() {
       console.error(`Error fetching shifts: ${error.message}`);
       return [];
     }
-  }, [currentDate]);
+  }, [currentDate, formatDate]);
 
   // Save shift to Firebase
   const saveShiftToFirebase = useCallback(async (shift) => {
@@ -333,59 +185,59 @@ export default function ShiftScheduler() {
     return savedShift;
   }, []);
 
-// Update shift in Firebase
-const updateShiftInFirebase = useCallback(async (shift) => {
-  try {
-    // Extract the required data
-    const date = shift.date;
-    const id = shift.id;
-    
-    if (!date) {
-      throw new Error("Missing date in shift data");
+  // Update shift in Firebase
+  const updateShiftInFirebase = useCallback(async (shift) => {
+    try {
+      // Extract the required data
+      const date = shift.date;
+      const id = shift.id;
+      
+      if (!date) {
+        throw new Error("Missing date in shift data");
+      }
+      
+      if (!id) {
+        throw new Error("Missing ID in shift data");
+      }
+      
+      console.log(`Updating shift with path: schedules/${date}/shifts/${id}`);
+      
+      // Remove properties that could cause issues with Firestore
+      const shiftDataForFirebase = { ...shift };
+      
+      // Pass the date and the ID
+      const updatedShift = await updateFirebaseShift(date, id, shiftDataForFirebase);
+      return updatedShift;
+    } catch (error) {
+      console.error("Failed to update shift:", error);
+      throw error;
     }
-    
-    if (!id) {
-      throw new Error("Missing ID in shift data");
-    }
-    
-    console.log(`Updating shift with path: schedules/${date}/shifts/${id}`);
-    
-    // Remove properties that could cause issues with Firestore
-    const shiftDataForFirebase = { ...shift };
-    
-    // Pass the date and the ID
-    const updatedShift = await updateFirebaseShift(date, id, shiftDataForFirebase);
-    return updatedShift;
-  } catch (error) {
-    console.error("Failed to update shift:", error);
-    throw error;
-  }
-}, []);
+  }, []);
 
-// Delete from Firebase
-const deleteShiftFromFirebase = useCallback(async (shift) => {
-  try {
-    // Extract the required data from the shift object
-    const date = shift.date;
-    const id = shift.id;
-    
-    if (!date) {
-      throw new Error("Missing date in shift data");
+  // Delete from Firebase
+  const deleteShiftFromFirebase = useCallback(async (shift) => {
+    try {
+      // Extract the required data from the shift object
+      const date = shift.date;
+      const id = shift.id;
+      
+      if (!date) {
+        throw new Error("Missing date in shift data");
+      }
+      
+      if (!id) {
+        throw new Error("Missing ID in shift data");
+      }
+      
+      console.log(`Deleting shift with path: schedules/${date}/shifts/${id}`);
+      
+      await deleteFirebaseShift(date, id);
+      return true;
+    } catch (error) {
+      console.error("Failed to delete shift:", error);
+      throw error;
     }
-    
-    if (!id) {
-      throw new Error("Missing ID in shift data");
-    }
-    
-    console.log(`Deleting shift with path: schedules/${date}/shifts/${id}`);
-    
-    await deleteFirebaseShift(date, id);
-    return true;
-  } catch (error) {
-    console.error("Failed to delete shift:", error);
-    throw error;
-  }
-}, []);
+  }, []);
 
   // Load users from Firebase
   useEffect(() => {
@@ -503,7 +355,7 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
     editShiftData.vehicleId,
     editShiftData.startTime,
     editShiftData.endTime,
-    editShiftData.id // ⬅️ add this so useEffect triggers when ID changes
+    editShiftData.id
   ]);
   
   
@@ -523,7 +375,7 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
     const start = startTime instanceof Date ? startTime : new Date(startTime);
     const end = endTime instanceof Date ? endTime : new Date(endTime);
     
-    const timeDisplay = `${formatTimeDisplay(start)}-${formatTimeDisplay(end)}`;
+    const timeDisplay = `${formatTimeInput(start)}-${formatTimeInput(end)}`;
     const status = isShiftAvailable(name) ? SHIFT_STATUS.AVAILABLE : SHIFT_STATUS.ASSIGNED;
     const dateISO = formatDate(currentDate, DATE_FORMATS.ISO);
     
@@ -546,8 +398,8 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
       date: dateISO,
       startTimeISO: start.toISOString(),
       endTimeISO: end.toISOString(),
-      startTimeFormatted: formatTimeDisplay(start),
-      endTimeFormatted: formatTimeDisplay(end),
+      startTimeFormatted: formatTimeInput(start),
+      endTimeFormatted: formatTimeInput(end),
       roleName: roleName,
       vehicleId,
       vehicleName,
@@ -556,13 +408,37 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
     };
   };
 
+  // Force timeline redraw after shifts are loaded
+  useEffect(() => {
+    if (shifts.length > 0 && timelineRef.current) {
+      console.log('Forcing timeline redraw after shifts loaded');
+      // Small delay to ensure DOM is ready
+      setTimeout(() => {
+        if (timelineRef.current) {
+          timelineRef.current.redraw();
+        }
+      }, 100);
+    }
+  }, [shifts]);
+
   // Initialize shifts with consistent date format after component mounts
   useEffect(() => {
-    console.log("USE EFFECT CALLED");
+    console.log("USE EFFECT CALLED - Loading shifts");
+    console.log("Current state:", {
+      roles: roles.length,
+      currentDate: currentDate,
+      timelineRef: !!timelineRef.current,
+      itemsDatasetRef: !!itemsDatasetRef.current
+    });
+    
     let lastFetchTime = 0;
     
     const loadShifts = async () => {
-      if (roles.length === 0) return; // Wait until roles are loaded
+      // Wait until roles are loaded and not just the default role
+      if (roles.length === 0 || (roles.length === 1 && roles[0].id === 'default')) {
+        console.log('Waiting for roles to load...');
+        return;
+      }
 
       const now = Date.now();
       if (now - lastFetchTime < 5000) {
@@ -570,9 +446,15 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
       }
       lastFetchTime = now;
 
+      // Check if we've already loaded shifts for this date
+      const currentDateISO = formatDate(currentDate, DATE_FORMATS.ISO);
+      if (lastLoadedDateRef.current === currentDateISO) {
+        return;
+      }
+      lastLoadedDateRef.current = currentDateISO;
+
       try {
-        const dateISO = formatDate(currentDate, DATE_FORMATS.ISO);
-        console.log(`Fetching shifts for date: ${dateISO}`);
+        console.log(`Fetching shifts for date: ${currentDateISO}`);
         
         // Clear existing shifts from both state and timeline dataset
         setShifts([]);
@@ -587,18 +469,18 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
           
           // Format the shifts for the timeline
           const formattedShifts = firebaseShifts.map(shift => {
-            console.log('📊 Processing shift from Firebase:', {
+            console.log('Processing shift:', {
               id: shift.id,
               startTimeISO: shift.startTimeISO,
               endTimeISO: shift.endTimeISO,
-              startTimeISOType: typeof shift.startTimeISO,
-              endTimeISOType: typeof shift.endTimeISO
+              role: shift.role,
+              status: shift.status
             });
             
             // Check if the role exists
             const roleExists = roles.some(r => r.id === shift.role);
             if (!roleExists) {
-              console.warn(`Shift ${shift.id} references invalid role ${shift.role}, skipping, existing roles:`, roles.map(r => r.id));
+              console.warn(`Shift ${shift.id} references invalid role ${shift.role}`);
               return null;
             }
             
@@ -607,63 +489,55 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
               let startDate, endDate;
               
               if (shift.startTimeISO && typeof shift.startTimeISO === 'object' && 'seconds' in shift.startTimeISO) {
-                // This is a Firestore Timestamp
                 startDate = new Date(shift.startTimeISO.seconds * 1000);
+                console.log('Converted Firestore Timestamp to Date:', {
+                  original: shift.startTimeISO,
+                  converted: startDate
+                });
               } else {
                 startDate = new Date(shift.startTimeISO);
               }
               
               if (shift.endTimeISO && typeof shift.endTimeISO === 'object' && 'seconds' in shift.endTimeISO) {
-                // This is a Firestore Timestamp
                 endDate = new Date(shift.endTimeISO.seconds * 1000);
               } else {
                 endDate = new Date(shift.endTimeISO);
               }
               
               if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-                console.error('Invalid dates in shift:', shift);
+                console.error('Invalid dates in shift:', {
+                  shift,
+                  startDate,
+                  endDate
+                });
                 return null;
               }
               
-              // Create a timeline item using Firebase's document ID as the primary ID
               const formattedShift = {
                 ...shift,
-                // Essential timeline properties
-                id: shift.id, // This is the Firebase document ID
-                group: shift.role, // Map role to group for vis-timeline
+                id: shift.id,
+                group: shift.role,
                 content: `${shift.name} | ${shift.startTimeFormatted}-${shift.endTimeFormatted}`,
                 start: startDate.toISOString(),
                 end: endDate.toISOString(),
                 className: shift.status === SHIFT_STATUS.AVAILABLE ? 'shift-item available-shift' : 'shift-item',
-                
-                // Make sure we always have a date
-                date: shift.date || dateISO,
+                date: shift.date || currentDateISO,
               };
               
-              console.log('✅ Formatted shift:', {
-                id: formattedShift.id,
-                start: formattedShift.start,
-                end: formattedShift.end,
-                startType: typeof formattedShift.start,
-                endType: typeof formattedShift.end
-              });
-              
+              console.log('Formatted shift:', formattedShift);
               return formattedShift;
             } catch (err) {
               console.error(`Error formatting shift ${shift.id}:`, err);
               return null;
             }
-          }).filter(shift => shift !== null); // Filter out null entries
+          }).filter(shift => shift !== null);
           
-          // Debug the formatted shifts
-          console.log('Formatted shifts with IDs:', formattedShifts.map(s => ({ 
-            id: s.id,
-            content: s.content
-          })));
+          console.log('Setting formatted shifts:', formattedShifts);
           
+          // Update the state first
           setShifts(formattedShifts);
           
-          // Update the timeline dataset if available
+          // Then update the timeline dataset if available
           if (itemsDatasetRef.current) {
             console.log('Updating timeline dataset with new shifts');
             // Clear the dataset first to ensure no old shifts remain
@@ -692,10 +566,8 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
       }
     };
     
-    if (roles.length > 0) {
-      loadShifts();
-    }
-  }, [fetchShiftsFromFirebase, roles, currentDate]);
+    loadShifts();
+  }, [fetchShiftsFromFirebase, roles, currentDate, formatDate]);
 
   // Force timeline reinitialization when data is ready
   useEffect(() => {
@@ -763,24 +635,6 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
 
   // ========== Event Handlers ==========
   
-  // Get timeline reference after it's mounted
-  const getTimelineRef = (ref, itemsDataset, groupsDataset) => {
-    timelineRef.current = ref;
-    itemsDatasetRef.current = itemsDataset;
-    rolesDatasetRef.current = groupsDataset;
-
-    // Add wheel event listener to prevent vertical scrolling
-    if (ref && ref.dom && ref.dom.root) {
-      const container = ref.dom.root;
-      container.addEventListener('wheel', (e) => {
-        // Only prevent default if it's a vertical scroll
-        if (e.deltaY !== 0) {
-          e.preventDefault();
-        }
-      }, { passive: false });
-    }
-  };
-
   // Function to handle background clicks
   const handleBackgroundClick = useCallback((clickEvent) => {
     console.log('=== handleBackgroundClick ===');
@@ -1264,8 +1118,8 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
         name: editShiftData.name,
         startTimeISO: startTime.toISOString(),
         endTimeISO: endTime.toISOString(),
-        startTimeFormatted: formatTimeDisplay(startTime),
-        endTimeFormatted: formatTimeDisplay(endTime),
+        startTimeFormatted: formatTimeInput(startTime),
+        endTimeFormatted: formatTimeInput(endTime),
         role: editShiftData.role,
         roleName: editShiftData.roleName,
         status: editShiftData.status,
@@ -1273,7 +1127,7 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
         vehicleId: editShiftData.vehicleId || null,
         vehicleName: editShiftData.vehicleName || null,
         updatedAt: new Date().toISOString(),
-        content: `${editShiftData.name} | ${formatTimeDisplay(startTime)}-${formatTimeDisplay(endTime)}`
+        content: `${editShiftData.name} | ${formatTimeInput(startTime)}-${formatTimeInput(endTime)}`
       };
       
       console.log(`[updateShiftFromDialog] Updating shift with data:`, shiftDataForFirebase);
@@ -1340,7 +1194,7 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
       // Make sure we're using the correct date format for display
       const startTime = new Date(event.start);
       const endTime = new Date(event.end);
-      const timeDisplay = `${formatTimeDisplay(startTime)}-${formatTimeDisplay(endTime)}`;
+      const timeDisplay = `${formatTimeInput(startTime)}-${formatTimeInput(endTime)}`;
       const status = originalShift.status || (isShiftAvailable(originalShift.name) ? SHIFT_STATUS.AVAILABLE : SHIFT_STATUS.ASSIGNED);
       
       console.log(`Updating shift ${originalShift.id} with new time: ${timeDisplay}`);
@@ -1358,8 +1212,8 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
         // For Firestore
         startTimeISO: event.start,
         endTimeISO: event.end,
-        startTimeFormatted: formatTimeDisplay(startTime),
-        endTimeFormatted: formatTimeDisplay(endTime),
+        startTimeFormatted: formatTimeInput(startTime),
+        endTimeFormatted: formatTimeInput(endTime),
         roleName: getRoleNameById(event.group || originalShift.group),
         
         // Don't update createdAt
