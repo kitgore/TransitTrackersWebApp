@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import GanttTimeline from '@/components/vis-timeline'; // Adjust path as needed
+import GanttTimeline from '@/components/vis-timeline';
 import {
   Dialog,
   DialogContent,
@@ -12,17 +12,14 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar as CalendarIcon } from "lucide-react";
-import dayjs from 'dayjs';
-
-import { Label } from '@/components/ui/label';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { 
   fetchShiftsByDate, 
-  createShift as createFirebaseShift, 
-  updateShift as updateFirebaseShift, 
-  deleteShift as deleteFirebaseShift,
+  updateShift as updateFirebaseShift,
   fetchUsers,
   fetchRoles,
   fetchVehicles,
@@ -31,38 +28,39 @@ import {
   removeVehicleFromShift,
   updateShiftWithVehicle
 } from '@/src/firebase/shiftService';
+import { useBaseSchedule, SHIFT_STATUS, DATE_FORMATS } from './base-schedule';
 import { useAuth } from '@/context/AuthContext';
-import Link from 'next/link';
-import { cn } from '@/lib/utils';
-
-// Constants for shift status
-const SHIFT_STATUS = {
-  AVAILABLE: 'AVAILABLE',
-  ASSIGNED: 'ASSIGNED',
-  PENDING: 'PENDING',
-};
-
-// Constants for date formatting
-const DATE_FORMATS = {
-  ISO: 'iso',
-  DISPLAY: 'display',
-};
 
 export default function ShiftScheduler() {
   // Get current user from AuthContext
   const { user } = useAuth();
   
-  // Reference to timeline for event handling
-  const timelineRef = useRef(null);
-  const containerRef = useRef(null);
-  
-  // Reference to the timeline's internal datasets
-  const itemsDatasetRef = useRef(null);
-  const rolesDatasetRef = useRef(null);
-  
-  // Get today's date for creating the sample data
-  const [currentDate, setCurrentDate] = useState(() => new Date());
-  
+  // Get base functionality from useBaseSchedule hook
+  const {
+    timelineRef,
+    containerRef,
+    itemsDatasetRef,
+    rolesDatasetRef,
+    currentDate,
+    setCurrentDate,
+    roles,
+    setRoles,
+    users,
+    setUsers,
+    shifts,
+    setShifts,
+    options,
+    setOptions,
+    getTimelineRef,
+    formatDate,
+    getRoleNameById,
+    formatTimeInput,
+    isShiftAvailable,
+    formatDateHeader,
+    formatTimeForTitle,
+    getRoleDisplayName
+  } = useBaseSchedule();
+
   // State for dialog control - only keep the edit dialog for picking up shifts
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   
@@ -82,14 +80,6 @@ export default function ShiftScheduler() {
     vehicleName: null,
   });
 
-  // State for roles and users
-  const [roles, setRoles] = useState([
-      { id: 'default', content: 'Loading Roles...' }
-  ]);
-  
-  // State for users
-  const [users, setUsers] = useState([]);
-  
   // State for vehicles
   const [vehicles, setVehicles] = useState([]);
   
@@ -98,156 +88,30 @@ export default function ShiftScheduler() {
   
   // State for vehicle selection error
   const [vehicleError, setVehicleError] = useState('');
+  const [pickupError, setPickupError] = useState('');
 
-  const colors = { bg: '#18181b', border: '#18181b' };
+  // Reference to track resize state
+  const isResizingRef = useRef(false);
   
-  // State for shifts - start with empty array
-  const [shifts, setShifts] = useState([]);
-  
-  // Timeline options with fixed window
-  const [options, setOptions] = useState({
-    min: new Date(new Date(currentDate).setHours(5, 0, 0, 0)),  // scrollable lower bound
-    max: new Date(new Date(currentDate).setHours(24, 0, 0, 0)), // scrollable upper bound
-    start: new Date(new Date(currentDate).setHours(8, 0, 0, 0)), // initial view start
-    end: new Date(new Date(currentDate).setHours(16, 0, 0, 0)),  // initial view end
-    editable: false, // Disable editing (dragging/resizing)
-    selectable: true,
-    margin: {
-      item: {
-        horizontal: 0,
-      }
-    },
-    // Set showMajorLabels to false to hide the date headers
-    showMajorLabels: false,
-    showMinorLabels: true,
-    orientation: 'top',
-    timeAxis: { scale: 'hour', step: 1 },
-    zoomable: true, // Enable zooming
-    moveable: true, // Enable panning
-    verticalScroll: false, // Disable vertical scrolling
-    // Add custom format for the time labels to ensure they just show hours
-    format: {
-      minorLabels: {
-        hour: 'h a', // Format hour labels as "8 am", "9 am", etc.
-        minute: 'h:mm a'
-      }
-    },
-    // Set row heights to match current filled row height
-    groupHeightMode: 'fixed',
+  // Add a ref to track the last loaded date
+  const lastLoadedDateRef = useRef(null);
+
+  // State for pickup dialog
+  const [pickupDialogOpen, setPickupDialogOpen] = useState(false);
+  const [pickupShiftData, setPickupShiftData] = useState({
+    id: '',
+    name: '',
+    startTime: null,
+    endTime: null,
+    role: '',
+    roleName: '',
+    formattedStartTime: '',
+    formattedEndTime: '',
+    status: '',
+    date: '',
+    vehicleId: null,
+    vehicleName: null,
   });
-
-  // ========== Utility Functions ==========
-  
-  // Format date consistently - this is critical!
-  const formatDateForTimeline = (date) => {
-    return date.toISOString(); // Always use ISO string with timezone
-  };
-  
-  // Create a date at a specific hour
-  const createDateAtHour = (hour, minutes = 0) => {
-    const date = new Date(currentDate);
-    date.setHours(hour, minutes, 0, 0);
-    return formatDateForTimeline(date);
-  };
-  
-  // Format time display in HH:MM AM/PM format
-  const formatTimeDisplay = (dateInput) => {
-    const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
-    const hours = date.getHours();
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    const formattedHours = hours % 12 || 12; // Convert to 12-hour format
-    return `${formattedHours}:${minutes} ${ampm}`;
-  };
-  
-  // Format time input value (HH:MM format for input type="time")
-  const formatTimeInput = (dateInput) => {
-    const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    return `${hours}:${minutes}`;
-  };
-  
-  // Parse time input value
-  const parseTimeInput = (timeStr, baseDate) => {
-    const [hours, minutes] = timeStr.split(':').map(Number);
-    const date = new Date(baseDate);
-    date.setHours(hours, minutes, 0, 0);
-    return date;
-  };
-
-  // Format date for Firebase queries and display
-  const formatDate = (date, format) => {
-    if (format === DATE_FORMATS.ISO) {
-      // Convert to local date string in YYYY-MM-DD format
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    } else {
-      const options = { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      };
-      return date.toLocaleDateString('en-US', options);
-    }
-  };
-  
-  // Format date header
-  const formatDateHeader = (date) => {
-    return formatDate(date, DATE_FORMATS.DISPLAY);
-  };
-  
-  // Function to determine if a shift is available
-  const isShiftAvailable = (name) => {
-    return name.toUpperCase() === SHIFT_STATUS.AVAILABLE;
-  };
-  
-  // Get role name by ID
-  const getRoleNameById = (roleId) => {
-    console.log('🔍 Looking up role name for ID:', roleId);
-    console.log('Available roles:', roles);
-    const role = roles.find(r => r.id === roleId);
-    console.log('Found role:', role);
-    return role ? role.content : roleId;
-  };
-
-  // Get role name for display
-  const getRoleDisplayName = (shift) => {
-    console.log('📋 Getting role display name for shift:', shift);
-    if (!shift) {
-      console.log('❌ No shift provided');
-      return '';
-    }
-    // First try to use the roleName from the shift data
-    if (shift.roleName) {
-      console.log('✅ Using shift.roleName:', shift.roleName);
-      return shift.roleName;
-    }
-    // Fallback to looking up the role name
-    console.log('🔄 Falling back to role lookup for role:', shift.role);
-    return getRoleNameById(shift.role);
-  };
-
-  // Format time for dialog title
-  const formatTimeForTitle = (date) => {
-    if (!date) return '';
-    const hours = date.getHours();
-    const minutes = date.getMinutes();
-    const ampm = hours >= 12 ? 'pm' : 'am';
-    const formattedHours = hours % 12 || 12;
-    return `${formattedHours}:${minutes.toString().padStart(2, '0')} ${ampm}`;
-  };
-
-  // update the date when currentDate changes
-  useEffect(() => {
-    if (!timelineRef.current) return;
-    const min = new Date(new Date(currentDate).setHours(5, 0, 0, 0));
-    const max = new Date(new Date(currentDate).setHours(24, 0, 0, 0));
-    timelineRef.current.setWindow(min, max, { animation: false });
-  }, [currentDate]);
 
   // ========== Firebase Integration Functions ==========
   
@@ -270,79 +134,36 @@ export default function ShiftScheduler() {
       console.error(`Error fetching shifts: ${error.message}`);
       return [];
     }
-  }, [currentDate]);
+  }, [currentDate, formatDate]);
 
-  // Save shift to Firebase
-  const saveShiftToFirebase = useCallback(async (shift) => {
-    const savedShift = await createFirebaseShift(shift);
-    return savedShift;
+  // Update shift in Firebase
+  const updateShiftInFirebase = useCallback(async (shift) => {
+    try {
+      // Extract the required data
+      const date = shift.date;
+      const id = shift.id;
+      
+      if (!date) {
+        throw new Error("Missing date in shift data");
+      }
+      
+      if (!id) {
+        throw new Error("Missing ID in shift data");
+      }
+      
+      console.log(`Updating shift with path: schedules/${date}/shifts/${id}`);
+      
+      // Remove properties that could cause issues with Firestore
+      const shiftDataForFirebase = { ...shift };
+      
+      // Pass the date and the ID
+      const updatedShift = await updateFirebaseShift(date, id, shiftDataForFirebase);
+      return updatedShift;
+    } catch (error) {
+      console.error("Failed to update shift:", error);
+      throw error;
+    }
   }, []);
-
-// Update shift in Firebase
-const updateShiftInFirebase = useCallback(async (shift) => {
-  try {
-    // Extract the required data
-    const date = shift.date;
-    const id = shift.id;
-    
-    if (!date) {
-      throw new Error("Missing date in shift data");
-    }
-    
-    if (!id) {
-      throw new Error("Missing ID in shift data");
-    }
-    
-    console.log(`Updating shift with path: schedules/${date}/shifts/${id}`);
-    
-    // Create a clean object with only the fields we want to update
-    const shiftDataForFirebase = {
-      name: shift.name,
-      startTimeISO: shift.startTimeISO,
-      endTimeISO: shift.endTimeISO,
-      startTimeFormatted: shift.startTimeFormatted,
-      endTimeFormatted: shift.endTimeFormatted,
-      role: shift.role,
-      roleName: shift.roleName,
-      status: shift.status,
-      userId: shift.userId,
-      vehicleId: shift.vehicleId,
-      vehicleName: shift.vehicleName
-    };
-    
-    // Pass the date and the ID
-    const updatedShift = await updateFirebaseShift(date, id, shiftDataForFirebase);
-    return updatedShift;
-  } catch (error) {
-    console.error("Failed to update shift:", error);
-    throw error;
-  }
-}, []);
-
-// Delete from Firebase
-const deleteShiftFromFirebase = useCallback(async (shift) => {
-  try {
-    // Extract the required data from the shift object
-    const date = shift.date;
-    const id = shift.id;
-    
-    if (!date) {
-      throw new Error("Missing date in shift data");
-    }
-    
-    if (!id) {
-      throw new Error("Missing ID in shift data");
-    }
-    
-    console.log(`Deleting shift with path: schedules/${date}/shifts/${id}`);
-    
-    await deleteFirebaseShift(date, id);
-    return true;
-  } catch (error) {
-    console.error("Failed to delete shift:", error);
-    throw error;
-  }
-}, []);
 
   // Load users from Firebase
   useEffect(() => {
@@ -420,22 +241,21 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
   // Check vehicle availability when shift times change
   useEffect(() => {
     const checkAvailability = async () => {
-      // Only check if we have a vehicle selected and valid times
-      if (
-        editShiftData.vehicleId && 
-        editShiftData.startTime && 
-        editShiftData.endTime
-      ) {
-        const vehicleId = editShiftData.vehicleId;
-        const startDate = editShiftData.startTime.toISOString().split('T')[0]; // get date portion
-        const endDate = editShiftData.endTime.toISOString().split('T')[0]; // get date portion
-        const shiftId = editShiftData.id; // pass shift ID to avoid conflict with the current shift
+      const vehicleId = editShiftData.vehicleId;
+      const startTime = editShiftData.startTime;
+      const endTime = editShiftData.endTime;
+      const currentShiftId = editShiftData.id;
   
+      if (vehicleId && startTime && endTime) {
         try {
-          console.log(`Checking availability for vehicle ${vehicleId} from ${startDate} to ${endDate}`);
-          
-          const result = await checkVehicleAvailability(vehicleId, startDate, endDate, shiftId); // pass shiftId to avoid conflict
-          
+          console.log(`Checking availability for vehicle ${vehicleId} from ${startTime.toISOString()} to ${endTime.toISOString()}`);
+          const result = await checkVehicleAvailability(
+            vehicleId,
+            startTime.toISOString(),
+            endTime.toISOString(),
+            currentShiftId
+          );
+  
           setVehicleAvailability(prev => ({
             ...prev,
             [vehicleId]: result
@@ -454,62 +274,7 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
     };
   
     checkAvailability();
-  }, [
-    editShiftData.vehicleId, 
-    editShiftData.startTime, 
-    editShiftData.endTime,
-    editShiftData.id // Ensure the shift ID triggers when it changes
-  ]);
-  
-  
-  // ========== Shift Management Functions ==========
-  
-  // Create a shift object with proper format - Firebase will generate the ID
-  const createShiftObject = ({
-    name, 
-    startTime, 
-    endTime, 
-    role, 
-    userId = null,
-    vehicleId = null,
-    vehicleName = null,
-  }) => {
-    // Ensure we have proper Date objects
-    const start = startTime instanceof Date ? startTime : new Date(startTime);
-    const end = endTime instanceof Date ? endTime : new Date(endTime);
-    
-    const timeDisplay = `${formatTimeDisplay(start)}-${formatTimeDisplay(end)}`;
-    const status = isShiftAvailable(name) ? SHIFT_STATUS.AVAILABLE : SHIFT_STATUS.ASSIGNED;
-    const dateISO = formatDate(currentDate, DATE_FORMATS.ISO);
-    
-    // Get role name - roles should be loaded at this point
-    const roleName = getRoleNameById(role);
-    
-    return {
-      // Don't set an id field - Firebase will generate this
-      group: role,
-      content: `${name} | ${timeDisplay}`,
-      start: start.toISOString(), // Ensure ISO string format
-      end: end.toISOString(), // Ensure ISO string format
-      className: status === SHIFT_STATUS.AVAILABLE ? 'shift-item available-shift' : 'shift-item',
-      name,
-      status,
-      userId,
-      
-      // For Firestore
-      role,
-      date: dateISO,
-      startTimeISO: start.toISOString(),
-      endTimeISO: end.toISOString(),
-      startTimeFormatted: formatTimeDisplay(start),
-      endTimeFormatted: formatTimeDisplay(end),
-      roleName: roleName,
-      vehicleId,
-      vehicleName,
-      
-      // Timestamps will be added in Firebase service
-    };
-  };
+  }, [editShiftData.vehicleId, editShiftData.startTime, editShiftData.endTime, editShiftData.id]);
 
   // Force timeline redraw after shifts are loaded
   useEffect(() => {
@@ -524,112 +289,6 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
     }
   }, [shifts]);
 
-  // Get timeline reference after it's mounted
-  const getTimelineRef = (ref, itemsDataset, groupsDataset) => {
-    console.log('Timeline mounted with:', {
-      ref: !!ref,
-      itemsDataset: !!itemsDataset,
-      groupsDataset: !!groupsDataset,
-      shifts: shifts.length,
-      roles: roles.length,
-      hasDom: ref && ref.dom ? true : false
-    });
-    
-    timelineRef.current = ref;
-    itemsDatasetRef.current = itemsDataset;
-    rolesDatasetRef.current = groupsDataset;
-    
-    // Add wheel event listener to prevent vertical scrolling
-    if (ref && ref.dom && ref.dom.root) {
-      const container = ref.dom.root;
-      container.addEventListener('wheel', (e) => {
-        if (e.deltaY !== 0) {
-          e.preventDefault();
-        }
-      }, { passive: false });
-    }
-    
-    // Add click event listener to the timeline
-    if (ref) {
-      console.log('Registering timeline click handler');
-      
-      // Remove any existing handlers first to avoid duplicates
-      ref.off('click');
-      ref.off('doubleClick');
-      
-      // Register our custom click handler for all clicks
-      ref.on('click', handleTimelineClick);
-      
-      // Also register a double-click handler as backup
-      ref.on('doubleClick', (event) => {
-        if (event.item) {
-          handleShiftPickup(event.item);
-        }
-      });
-
-      // Force initial redraw with a delay to ensure DOM is ready
-      const initializeTimeline = () => {
-        if (ref && ref.dom && ref.dom.root) {
-          console.log('Forcing initial timeline redraw');
-          const container = ref.dom.root;
-          const height = container.clientHeight;
-          const width = container.clientWidth;
-          
-          // Force container resize
-          container.style.height = `${height}px`;
-          container.style.width = `${width}px`;
-          
-          // Set initial options
-          ref.setOptions(options);
-          
-          // Force timeline redraw
-          ref.redraw();
-        } else {
-          console.log('Timeline DOM not ready, retrying in 100ms');
-          setTimeout(initializeTimeline, 100);
-        }
-      };
-
-      // Start initialization
-      initializeTimeline();
-    }
-  };
-
-  // Update options when currentDate changes
-  useEffect(() => {
-    const now = new Date();
-    const currentHour = now.getHours();
-    
-    // Calculate the start and end times for the 8-hour window
-    let startHour = currentHour - 4; // Center on current time
-    let endHour = currentHour + 4;
-    
-    // Handle edge cases
-    if (startHour < 5) { // If start would be before 5am
-      startHour = 5;
-      endHour = 13; // Show 5am-1pm
-    } else if (endHour > 24) { // If end would be after midnight
-      endHour = 24;
-      startHour = 16; // Show 4pm-midnight
-    }
-    
-    const newOptions = {
-      ...options,
-      min: new Date(new Date(currentDate).setHours(5, 0, 0, 0)),
-      max: new Date(new Date(currentDate).setHours(24, 0, 0, 0)),
-      start: new Date(new Date(currentDate).setHours(startHour, 0, 0, 0)),
-      end: new Date(new Date(currentDate).setHours(endHour, 0, 0, 0))
-    };
-    
-    console.log('Updating timeline options:', newOptions);
-    setOptions(newOptions);
-    
-    if (timelineRef.current) {
-      timelineRef.current.setOptions(newOptions);
-      timelineRef.current.redraw();
-    }
-  }, [currentDate]);
-
   // Initialize shifts with consistent date format after component mounts
   useEffect(() => {
     console.log("USE EFFECT CALLED - Loading shifts");
@@ -637,7 +296,8 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
       roles: roles.length,
       currentDate: currentDate,
       timelineRef: !!timelineRef.current,
-      itemsDatasetRef: !!itemsDatasetRef.current
+      itemsDatasetRef: !!itemsDatasetRef.current,
+      currentUser: !!user
     });
     
     let lastFetchTime = 0;
@@ -651,14 +311,19 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
 
       const now = Date.now();
       if (now - lastFetchTime < 5000) {
-        console.log('Skipping fetch due to rate limiting');
         return;
       }
       lastFetchTime = now;
 
+      // Check if we've already loaded shifts for this date
+      const currentDateISO = formatDate(currentDate, DATE_FORMATS.ISO);
+      if (lastLoadedDateRef.current === currentDateISO) {
+        return;
+      }
+      lastLoadedDateRef.current = currentDateISO;
+
       try {
-        const dateISO = formatDate(currentDate, DATE_FORMATS.ISO);
-        console.log(`Fetching shifts for date: ${dateISO}`);
+        console.log(`Fetching shifts for date: ${currentDateISO}`);
         
         // Clear existing shifts from both state and timeline dataset
         setShifts([]);
@@ -667,10 +332,9 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
         }
         
         const firebaseShifts = await fetchShiftsFromFirebase();
-        console.log('Raw shifts from Firebase:', firebaseShifts);
         
         if (firebaseShifts.length > 0) {
-          console.log('Processing shifts for timeline');
+          console.log('Loaded shifts from Firebase:', firebaseShifts);
           
           // Format the shifts for the timeline
           const formattedShifts = firebaseShifts.map(shift => {
@@ -726,7 +390,7 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
                 start: startDate.toISOString(),
                 end: endDate.toISOString(),
                 className: shift.status === SHIFT_STATUS.AVAILABLE ? 'shift-item available-shift' : 'shift-item',
-                date: shift.date || dateISO,
+                date: shift.date || currentDateISO,
               };
               
               console.log('Formatted shift:', formattedShift);
@@ -772,7 +436,7 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
     };
     
     loadShifts();
-  }, [fetchShiftsFromFirebase, roles, currentDate]);
+  }, [fetchShiftsFromFirebase, roles, currentDate, formatDate]);
 
   // Force timeline reinitialization when data is ready
   useEffect(() => {
@@ -807,16 +471,45 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
     }
   }, [shifts, roles, currentDate, options]);
 
-  // ========== Event Handlers ==========
-
-  // Function to handle shift pickup (modified from handleShiftEdit)
-  const handleShiftPickup = (itemId) => {
-    console.log('Opening pickup dialog for shift:', itemId);
+  // Update options when currentDate changes
+  useEffect(() => {
+    const now = new Date();
+    const currentHour = now.getHours();
     
-    if (!user) {
-      alert('You must be logged in to pick up shifts.');
-      return;
+    // Calculate the start and end times for the 8-hour window
+    let startHour = currentHour - 4; // Center on current time
+    let endHour = currentHour + 4;
+    
+    // Handle edge cases
+    if (startHour < 5) { // If start would be before 5am
+      startHour = 5;
+      endHour = 13; // Show 5am-1pm
+    } else if (endHour > 24) { // If end would be after midnight
+      endHour = 24;
+      startHour = 16; // Show 4pm-midnight
     }
+    
+    const newOptions = {
+      ...options,
+      min: new Date(new Date(currentDate).setHours(5, 0, 0, 0)),
+      max: new Date(new Date(currentDate).setHours(24, 0, 0, 0)),
+      start: new Date(new Date(currentDate).setHours(startHour, 0, 0, 0)),
+      end: new Date(new Date(currentDate).setHours(endHour, 0, 0, 0))
+    };
+    
+    console.log('Updating timeline options:', newOptions);
+    setOptions(newOptions);
+    
+    if (timelineRef.current) {
+      timelineRef.current.setOptions(newOptions);
+      timelineRef.current.redraw();
+    }
+  }, [currentDate]);
+
+  // Function to handle shift editing
+  const handleShiftEdit = useCallback((itemId) => {
+    console.log('=== handleShiftEdit ===');
+    console.log('Opening edit dialog for shift:', itemId);
     
     if (timelineRef.current && itemsDatasetRef.current) {
       try {
@@ -833,25 +526,13 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
         // Try to find the shift in our state array
         let fullShiftData = shifts.find(s => s.id === itemId);
         
-        // If not found by direct ID match, try looking at our shift data more carefully
+        // If not found by direct ID match, create a minimal version
         if (!fullShiftData) {
-          console.log("Direct ID match not found, checking all shifts...");
-          console.log("All shift IDs:", shifts.map(s => s.id));
-          
-          // Create a minimal version based on the timeline item data
           fullShiftData = {
             id: itemId,
             date: formatDate(currentDate, DATE_FORMATS.ISO),
             ...datasetItem
           };
-          
-          console.log("Using dataset item as fallback:", fullShiftData);
-        }
-        
-        // Only allow pickup of available shifts
-        if (fullShiftData.status !== SHIFT_STATUS.AVAILABLE) {
-          alert('This shift is not available for pickup.');
-          return;
         }
         
         // Convert string timestamps to Date objects
@@ -868,61 +549,77 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
         // Use the roleName from the full shift data
         const roleName = fullShiftData.roleName || getRoleNameById(datasetItem.group);
         
-        // Find current user in users array
-        const currentUser = users.find(u => u.id === user.uid);
-        const userName = currentUser ? `${currentUser.firstName} ${currentUser.lastName}`.trim() : 'Current User';
-        
-        console.log('Setting edit shift data with:', {
+        console.log('Setting edit shift data:', {
           id: itemId,
-          name: userName,
-          role: datasetItem.group,
-          roleName,
+          name,
           startTime,
           endTime,
-          userId: user.uid
+          role: datasetItem.group,
+          roleName
         });
         
-        // Set edit shift data using the timeline item data
+        // Set edit shift data
         setEditShiftData({
           id: itemId,
-          name: userName,
+          name: name,
           startTime: startTime,
           endTime: endTime,
           role: datasetItem.group,
           roleName: roleName,
           formattedStartTime: formatTimeInput(startTime),
           formattedEndTime: formatTimeInput(endTime),
-          status: SHIFT_STATUS.AVAILABLE,
-          userId: user.uid, // Set to current user
+          status: isShiftAvailable(name) ? SHIFT_STATUS.AVAILABLE : SHIFT_STATUS.ASSIGNED,
+          userId: fullShiftData.userId || null,
           date: fullShiftData.date || formatDate(currentDate, DATE_FORMATS.ISO),
-          createdAt: fullShiftData.createdAt || new Date(),
-          updatedAt: fullShiftData.updatedAt || new Date(),
           vehicleId: fullShiftData.vehicleId || null,
           vehicleName: fullShiftData.vehicleName || null,
         });
         
-        // Open the edit dialog
+        console.log('Opening edit dialog');
         setEditDialogOpen(true);
       } catch (error) {
         console.error('Error accessing timeline dataset:', error);
       }
     } else {
-      console.log('Timeline or dataset refs not available yet');
+      console.error('Timeline or dataset refs not available');
     }
+  }, [shifts, currentDate, formatDate, formatTimeInput, getRoleNameById, isShiftAvailable]);
+
+  // Function to handle start time changes in edit dialog
+  const handleEditStartTimeChange = (e) => {
+    const timeStr = e.target.value;
+    if (!timeStr) return;
+
+    // Parse the time string and create a new date
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    const newStartTime = new Date(editShiftData.startTime || currentDate);
+    newStartTime.setHours(hours, minutes, 0, 0);
+
+    setEditShiftData(prev => ({
+      ...prev,
+      startTime: newStartTime,
+      formattedStartTime: timeStr
+    }));
   };
 
-  // Function to handle ANY click on the timeline
-  const handleTimelineClick = (clickEvent) => {
-    console.log('Timeline clicked:', clickEvent);
-    
-    // If an item was clicked, handle the shift pickup
-    if (clickEvent.item) {
-      console.log(`Shift clicked: ${clickEvent.item}`);
-      handleShiftPickup(clickEvent.item);
-    }
+  // Function to handle end time changes in edit dialog
+  const handleEditEndTimeChange = (e) => {
+    const timeStr = e.target.value;
+    if (!timeStr) return;
+
+    // Parse the time string and create a new date
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    const newEndTime = new Date(editShiftData.startTime || currentDate);
+    newEndTime.setHours(hours, minutes, 0, 0);
+
+    setEditShiftData(prev => ({
+      ...prev,
+      endTime: newEndTime,
+      formattedEndTime: timeStr
+    }));
   };
 
-  // Function to update a shift from edit dialog data (modified to only allow pickup)
+  // Function to update a shift from edit dialog data
   const updateShiftFromDialog = async () => {
     try {
       if (vehicleError) {
@@ -933,7 +630,8 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
       const shiftId = editShiftData.id;
       const date = editShiftData.date;
       
-      console.log(`[updateShiftFromDialog] Updating shift ${shiftId} for date ${date}`);
+      console.log(`[updateShiftFromDialog] Starting update for shift ${shiftId}`);
+      console.log(`[updateShiftFromDialog] Current shift data:`, editShiftData);
       
       // Get the original shift to check for vehicle changes
       const originalShift = shifts.find(s => s.id === shiftId);
@@ -942,64 +640,75 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
         throw new Error(`Original shift ${shiftId} not found`);
       }
       
-      // Only allow pickup of available shifts
-      if (originalShift.status !== SHIFT_STATUS.AVAILABLE) {
-        alert('This shift is not available for pickup.');
-        return;
+      console.log(`[updateShiftFromDialog] Original shift data:`, originalShift);
+      console.log(`[updateShiftFromDialog] Vehicle change: ${originalShift.vehicleId} -> ${editShiftData.vehicleId}`);
+      
+      // Format time values for Firestore
+      const startTime = editShiftData.startTime instanceof Date ? editShiftData.startTime : new Date(editShiftData.startTime);
+      const endTime = editShiftData.endTime instanceof Date ? editShiftData.endTime : new Date(editShiftData.endTime);
+      
+      // Handle vehicle update first if there's a change
+      if (originalShift.vehicleId !== editShiftData.vehicleId) {
+        console.log(`[updateShiftFromDialog] Vehicle assignment changed, updating vehicle first`);
+        try {
+          await updateShiftWithVehicle(
+            shiftId,
+            editShiftData.vehicleId || null,
+            editShiftData.vehicleName || null,
+            date
+          );
+          console.log(`[updateShiftFromDialog] Vehicle assignment updated successfully`);
+        } catch (error) {
+          console.error(`[updateShiftFromDialog] Error updating vehicle assignment:`, error);
+          throw error;
+        }
       }
       
-      // Prepare shift data for Firebase - ensure all fields are properly formatted
+      // Prepare shift data for Firebase
       const shiftDataForFirebase = {
         id: shiftId,
         date: date,
         name: editShiftData.name,
-        startTimeISO: editShiftData.startTimeISO || new Date(editShiftData.startTime).toISOString(),
-        endTimeISO: editShiftData.endTimeISO || new Date(editShiftData.endTime).toISOString(),
-        startTimeFormatted: formatTimeDisplay(editShiftData.startTime),
-        endTimeFormatted: formatTimeDisplay(editShiftData.endTime),
+        startTimeISO: startTime.toISOString(),
+        endTimeISO: endTime.toISOString(),
+        startTimeFormatted: formatTimeInput(startTime),
+        endTimeFormatted: formatTimeInput(endTime),
         role: editShiftData.role,
         roleName: editShiftData.roleName,
-        status: SHIFT_STATUS.ASSIGNED, // Always set to ASSIGNED when picked up
-        userId: user.uid, // Always use current user
+        status: editShiftData.status,
+        userId: editShiftData.userId,
         vehicleId: editShiftData.vehicleId || null,
-        vehicleName: editShiftData.vehicleName || null
-        // Don't include updatedAt - let Firestore handle this
+        vehicleName: editShiftData.vehicleName || null,
+        updatedAt: new Date().toISOString(),
+        content: `${editShiftData.name} | ${formatTimeInput(startTime)}-${formatTimeInput(endTime)}`
       };
       
       console.log(`[updateShiftFromDialog] Updating shift with data:`, shiftDataForFirebase);
       
       // Update the shift in Firebase
-      await updateShiftInFirebase(shiftDataForFirebase);
-      console.log(`[updateShiftFromDialog] Shift updated in Firebase`);
+      try {
+        await updateShiftInFirebase(shiftDataForFirebase);
+        console.log(`[updateShiftFromDialog] Shift updated in Firebase successfully`);
+      } catch (error) {
+        console.error(`[updateShiftFromDialog] Error updating shift in Firebase:`, error);
+        throw error;
+      }
       
-      // Always update vehicle assignment to ensure it's handled correctly
-      console.log(`[updateShiftFromDialog] Updating vehicle assignment`);
-      // Pass the date to updateShiftWithVehicle to help it find the shift
-      await updateShiftWithVehicle(shiftId, editShiftData.vehicleId || null, editShiftData.vehicleName || null, date);
-      console.log(`[updateShiftFromDialog] Vehicle assignment updated`);
-      
-      // Update local state with the new shift data
-      const updatedShift = {
-        ...originalShift,
-        ...shiftDataForFirebase,
-        className: 'shift-item', // Remove the 'available-shift' class
-        content: `${editShiftData.name} | ${formatTimeDisplay(editShiftData.startTime)}-${formatTimeDisplay(editShiftData.endTime)}`,
-        vehicleId: editShiftData.vehicleId || null,
-        vehicleName: editShiftData.vehicleName || null
-      };
-      
-      // Update the shifts array with the new shift data
+      // Update local state
       setShifts(prevShifts => 
         prevShifts.map(shift => 
-          shift.id === shiftId ? updatedShift : shift
+          shift.id === shiftId 
+            ? {
+                ...shift,
+                ...shiftDataForFirebase,
+                start: startTime.toISOString(),
+                end: endTime.toISOString(),
+                vehicleId: editShiftData.vehicleId || null,
+                vehicleName: editShiftData.vehicleName || null
+              }
+            : shift
         )
       );
-      
-      // Update the timeline items dataset directly if available
-      if (itemsDatasetRef.current) {
-        console.log(`[updateShiftFromDialog] Updating timeline items dataset`);
-        itemsDatasetRef.current.update(updatedShift);
-      }
       
       console.log(`[updateShiftFromDialog] Local state updated`);
       setEditDialogOpen(false);
@@ -1010,69 +719,269 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
     }
   };
 
-  // Handle shift updates (when moved or resized) - disable this functionality
+  // Function to handle shift updates (when moved or resized)
   const handleTimeChange = async (event) => {
-    // Disable this functionality - users can't modify shift times
-    console.log('Shift time change disabled for regular users');
-  };
-
-  // ========== Form Input Handlers ==========
-
-  // Handle user selection in edit dialog
-  const handleEditUserSelect = (e) => {
-    const userId = e.target.value || null;
-    const selectedUser = users.find(u => u.id === userId);
+    console.log('Shift updated:', event);
     
-    setEditShiftData(prev => ({
-      ...prev,
-      userId: userId,
-      name: userId 
-        ? `${selectedUser?.firstName} ${selectedUser?.lastName}`.trim()
-        : SHIFT_STATUS.AVAILABLE,
-      status: userId ? SHIFT_STATUS.ASSIGNED : SHIFT_STATUS.AVAILABLE
-    }));
+    if (!event || !event.id) return;
+    
+    // Set resize flag
+    isResizingRef.current = true;
+    
+    try {
+      // Find the shift that was changed - should use the Firebase document ID
+      const originalShift = shifts.find(shift => shift.id === event.id);
+      
+      if (!originalShift) {
+        console.log('Original shift not found for update:', event.id);
+        console.log('Available shifts:', shifts.map(s => s.id));
+        return;
+      }
+      
+      // Make sure we have the date
+      if (!originalShift.date) {
+        console.error('Missing date in shift data');
+        return;
+      }
+      
+      // Make sure we're using the correct date format for display
+      const startTime = new Date(event.start);
+      const endTime = new Date(event.end);
+      const timeDisplay = `${formatTimeDisplay(startTime)}-${formatTimeDisplay(endTime)}`;
+      const status = originalShift.status || (isShiftAvailable(originalShift.name) ? SHIFT_STATUS.AVAILABLE : SHIFT_STATUS.ASSIGNED);
+      
+      console.log(`Updating shift ${originalShift.id} with new time: ${timeDisplay}`);
+      
+      // Create an updated shift object
+      const updatedShift = {
+        ...originalShift,
+        start: event.start,
+        end: event.end,
+        role: event.group || originalShift.role, // Update role from group
+        group: event.group || originalShift.group, // Update group for vis-timeline
+        content: `${originalShift.name} | ${timeDisplay}`,
+        className: status === SHIFT_STATUS.AVAILABLE ? 'shift-item available-shift' : 'shift-item',
+        
+        // For Firestore
+        startTimeISO: event.start,
+        endTimeISO: event.end,
+        startTimeFormatted: formatTimeDisplay(startTime),
+        endTimeFormatted: formatTimeDisplay(endTime),
+        roleName: getRoleNameById(event.group || originalShift.group),
+        
+        // Don't update createdAt
+        createdAt: originalShift.createdAt,
+        
+        // updatedAt will be set by the Firebase service
+      };
+      
+      // Update Firebase
+      await updateShiftInFirebase(updatedShift);
+      
+      // If the shift has a vehicle assigned, update the vehicle's assigned shifts
+      if (updatedShift.vehicleId) {
+        console.log(`Updating vehicle assignment for shift ${updatedShift.id}`);
+        await updateShiftWithVehicle(
+          updatedShift.id, 
+          updatedShift.vehicleId, 
+          updatedShift.vehicleName,
+          updatedShift.date
+        );
+      }
+      
+      // Update local state
+      setShifts(prevShifts => {
+        return prevShifts.map(shift => {
+          if (shift.id === event.id) {
+            return updatedShift;
+          }
+          return shift;
+        });
+      });
+    } catch (error) {
+      console.error('Failed to update shift time:', error);
+      // Could reset the timeline item to its original position
+    } finally {
+      // Reset resize flag after a short delay to prevent accidental clicks
+      setTimeout(() => {
+        isResizingRef.current = false;
+      }, 500);
+    }
   };
+
+  // Function to handle shift pickups
+  const handleShiftClick = useCallback((event) => {
+    console.log('Shift clicked:', event);
+    
+    if (!event || !event.item) return;
+    
+    // Find the clicked shift
+    const clickedShift = shifts.find(shift => shift.id === event.item);
+    
+    if (!clickedShift) {
+      console.log('Shift not found:', event.item);
+      return;
+    }
+    
+    // Only allow picking up available shifts
+    if (clickedShift.status !== SHIFT_STATUS.AVAILABLE) {
+      console.log('Shift is not available for pickup');
+      return;
+    }
+    
+    // Set the shift data for the pickup dialog
+    setPickupShiftData({
+      id: clickedShift.id,
+      name: clickedShift.name,
+      startTime: new Date(clickedShift.startTimeISO),
+      endTime: new Date(clickedShift.endTimeISO),
+      role: clickedShift.role,
+      roleName: clickedShift.roleName,
+      formattedStartTime: clickedShift.startTimeFormatted,
+      formattedEndTime: clickedShift.endTimeFormatted,
+      status: clickedShift.status,
+      date: clickedShift.date,
+      vehicleId: clickedShift.vehicleId,
+      vehicleName: clickedShift.vehicleName,
+    });
+    
+    // Open the pickup dialog
+    setPickupDialogOpen(true);
+  }, [shifts]);
+
+  // Function to handle shift pickup confirmation
+  const handlePickupConfirm = async () => {
+    try {
+      if (!user) {
+        console.error('No current user found');
+        alert('Please sign in to pick up shifts');
+        return;
+      }
+
+      // Check if a vehicle is assigned
+      if (!pickupShiftData.vehicleId) {
+        setPickupError('You must assign a vehicle!');
+        return;
+      }
+
+      // Find current user in users array and get their full name
+      const currentUser = users.find(u => u.id === user.uid);
+      const userName = currentUser ? `${currentUser.firstName} ${currentUser.lastName}`.trim() : user.displayName || user.email?.split('@')[0] || 'User';
+
+      // Format the shift data for both Firebase and the timeline
+      const updatedShift = {
+        ...pickupShiftData,
+        // Timeline required properties
+        id: pickupShiftData.id,
+        group: pickupShiftData.role,
+        start: pickupShiftData.startTime.toISOString(),
+        end: pickupShiftData.endTime.toISOString(),
+        content: `${userName} | ${pickupShiftData.formattedStartTime}-${pickupShiftData.formattedEndTime}`,
+        className: 'shift-item',
+        
+        // Firebase properties
+        status: SHIFT_STATUS.ASSIGNED,
+        userId: user.uid,
+        name: userName,
+        startTimeISO: pickupShiftData.startTime.toISOString(),
+        endTimeISO: pickupShiftData.endTime.toISOString(),
+        startTimeFormatted: pickupShiftData.formattedStartTime,
+        endTimeFormatted: pickupShiftData.formattedEndTime,
+        role: pickupShiftData.role,
+        roleName: pickupShiftData.roleName,
+        date: pickupShiftData.date,
+        vehicleId: pickupShiftData.vehicleId || null,
+        vehicleName: pickupShiftData.vehicleName || null
+      };
+
+      console.log('Updating shift with data:', updatedShift);
+
+      // Update in Firebase
+      await updateShiftInFirebase(updatedShift);
+
+      // Update local state
+      setShifts(prevShifts => 
+        prevShifts.map(shift => 
+          shift.id === pickupShiftData.id ? updatedShift : shift
+        )
+      );
+
+      // Close the dialog and reset errors
+      setPickupDialogOpen(false);
+      setPickupError('');
+    } catch (error) {
+      console.error('Failed to pick up shift:', error);
+      alert('Failed to pick up shift. Please try again.');
+    }
+  };
+
+  // Set up event listeners in a useEffect
+  useEffect(() => {
+    if (!timelineRef.current) return;
+
+    console.log('Setting up timeline event listeners');
+    
+    // Remove any existing handlers first to avoid duplicates
+    timelineRef.current.off('click');
+    timelineRef.current.off('doubleClick');
+    
+    // Handle clicks
+    const handleClick = (event) => {
+      console.log('Timeline click:', event);
+      
+      // If we clicked on a shift
+      if (event.item) {
+        console.log('Shift clicked:', event.item);
+        handleShiftClick(event);
+      }
+    };
+    
+    // Add event listeners
+    timelineRef.current.on('click', handleClick);
+    
+    // Cleanup function
+    return () => {
+      console.log('Cleaning up timeline event listeners');
+      if (timelineRef.current) {
+        timelineRef.current.off('click');
+      }
+    };
+  }, [handleShiftClick]);
 
   return (
     <div className="container mx-auto p-4">
-
-      <div className="flex justify-between items-center mb-2">
-        <Button onClick={() => setCurrentDate(prev => new Date(prev.getTime() - 86400000))}>
-          ← Previous Day
+      <div className="flex items-center gap-2 mb-2">
+        <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setCurrentDate(prev => new Date(prev.getTime() - 86400000))}>
+          <ChevronLeft className="h-6 w-6" />
         </Button>
-        <div className="flex items-center gap-4">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant={"outline"}
-                className={cn(
-                  "w-[280px] justify-start text-left font-normal",
-                  !currentDate && "text-muted-foreground"
-                )}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                <span>{formatDateHeader(currentDate)}</span>
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar
-                mode="single"
-                selected={currentDate}
-                onSelect={(date) => {
-                  if (date) {
-                    setCurrentDate(date);
-                  }
-                }}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
-          <Button asChild variant="outline">
-            <Link href="/my-shifts">View My Shifts</Link>
-          </Button>
-        </div>
-        <Button onClick={() => setCurrentDate(prev => new Date(prev.getTime() + 86400000))}>
-          Next Day →
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant={"outline"}
+              className={cn(
+                "w-[280px] h-10 justify-start text-left font-normal",
+                !currentDate && "text-muted-foreground"
+              )}
+            >
+              <CalendarIcon className="mr-2 h-5 w-5" />
+              <span>{formatDateHeader(currentDate)}</span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0">
+            <Calendar
+              mode="single"
+              selected={currentDate}
+              onSelect={(date) => {
+                if (date) {
+                  setCurrentDate(date);
+                }
+              }}
+              initialFocus
+            />
+          </PopoverContent>
+        </Popover>
+        <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setCurrentDate(prev => new Date(prev.getTime() + 86400000))}>
+          <ChevronRight className="h-6 w-6" />
         </Button>
       </div>
       
@@ -1097,84 +1006,61 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
         </div>
       )}
       
-      {/* Pickup Shift Dialog (modified from Edit Shift Dialog) */}
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+      {/* Pickup Shift Dialog */}
+      <Dialog open={pickupDialogOpen} onOpenChange={setPickupDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Pick Up Shift</DialogTitle>
             <DialogDescription>
-              {(() => {
-                console.log('🎯 Pickup dialog shift data:', editShiftData);
-                if (!editShiftData.id) {
-                  console.log('❌ No valid shift data yet');
-                  return 'Loading shift details...';
-                }
-                return editShiftData.roleName && editShiftData.startTime && editShiftData.endTime
-                  ? `Pick up shift for ${getRoleDisplayName(editShiftData)} at ${formatTimeForTitle(editShiftData.startTime)} to ${formatTimeForTitle(editShiftData.endTime)}`
-                  : 'Pick up shift';
-              })()}
+              {pickupShiftData.roleName && pickupShiftData.startTime && pickupShiftData.endTime
+                ? `Pick up shift for ${pickupShiftData.roleName} from ${formatTimeForTitle(pickupShiftData.startTime)} to ${formatTimeForTitle(pickupShiftData.endTime)}`
+                : 'Pick up shift'}
             </DialogDescription>
           </DialogHeader>
           
-          {editShiftData.id ? (
+          {pickupShiftData.id ? (
             <div className="grid gap-4 py-4">
-              {/* Display user information (read-only) */}
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right">
-                  Assigning To
-                </Label>
-                <div className="col-span-3 p-2 border rounded bg-gray-50">
-                  {editShiftData.name}
-                </div>
+                <Label className="text-right">Role</Label>
+                <div className="col-span-3">{pickupShiftData.roleName}</div>
               </div>
               
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="editVehicle" className="text-right">
+                <Label className="text-right">Time</Label>
+                <div className="col-span-3">
+                  {pickupShiftData.formattedStartTime} - {pickupShiftData.formattedEndTime}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="vehicle" className="text-right">
                   Assign Vehicle
                 </Label>
                 <div className="col-span-3">
                   <select 
-                    id="editVehicle"
-                    value={editShiftData.vehicleId || ''} 
+                    id="vehicle"
+                    value={pickupShiftData.vehicleId || ''} 
                     onChange={(e) => {
                       const vehicle = vehicles.find(v => v.id === e.target.value);
-                      setEditShiftData(prev => ({
+                      setPickupShiftData(prev => ({
                         ...prev,
                         vehicleId: e.target.value,
                         vehicleName: vehicle ? vehicle.name : ''
                       }));
+                      setPickupError(''); // Clear error when vehicle is selected
                     }}
                     className="w-full p-2 border rounded"
                   >
-                      <option value="">Select Vehicle</option>
-                      {vehicles
-                        .filter(vehicle => vehicle.status === 'Available')
-                        .map(vehicle => (
-                          <option key={vehicle.id} value={vehicle.id}>
-                            {vehicle.name}
-                          </option>
+                    <option value="">Select Vehicle</option>
+                    {vehicles
+                      .filter(vehicle => vehicle.status === 'Available')
+                      .map(vehicle => (
+                        <option key={vehicle.id} value={vehicle.id}>
+                          {vehicle.name}
+                        </option>
                     ))}
                   </select>
                   {vehicleError && <div className="text-red-500 text-sm mt-1">{vehicleError}</div>}
-                </div>
-              </div>
-              
-              {/* Display shift time information (read-only) */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right">
-                  Start Time
-                </Label>
-                <div className="col-span-3 p-2 border rounded bg-gray-50">
-                  {editShiftData.formattedStartTime}
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right">
-                  End Time
-                </Label>
-                <div className="col-span-3 p-2 border rounded bg-gray-50">
-                  {editShiftData.formattedEndTime}
                 </div>
               </div>
             </div>
@@ -1182,13 +1068,76 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
             <div className="py-4 text-center">Loading shift details...</div>
           )}
           
-          <DialogFooter className="flex justify-end">
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={updateShiftFromDialog}>Pick Up Shift</Button>
+          {pickupError && <div className="text-red-500 text-sm text-center mb-4">{pickupError}</div>}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setPickupDialogOpen(false);
+              setPickupError('');
+            }}>
+              Cancel
+            </Button>
+            <Button onClick={handlePickupConfirm}>Pick Up Shift</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Edit Shift Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Shift</DialogTitle>
+            <DialogDescription>
+              {(() => {
+                console.log('🎯 Edit dialog shift data:', editShiftData);
+                if (!editShiftData.id) {
+                  console.log('❌ No valid shift data yet');
+                  return 'Loading shift details...';
+                }
+                return editShiftData.roleName && editShiftData.startTime && editShiftData.endTime
+                  ? `Update shift details for ${getRoleDisplayName(editShiftData)} at ${formatTimeForTitle(editShiftData.startTime)} to ${formatTimeForTitle(editShiftData.endTime)}`
+                  : 'Update shift details';
+              })()}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {editShiftData.id ? (
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="editStartTime" className="text-right">
+                  Start Time
+                </Label>
+                <Input
+                  id="editStartTime"
+                  type="time" 
+                  value={editShiftData.formattedStartTime}
+                  onChange={handleEditStartTimeChange}
+                  className="col-span-3"
+                />
+              </div>
+              
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="editEndTime" className="text-right">
+                  End Time
+                </Label>
+                <Input
+                  id="editEndTime"
+                  type="time" 
+                  value={editShiftData.formattedEndTime}
+                  onChange={handleEditEndTimeChange}
+                  className="col-span-3"
+                />
+              </div>
             </div>
+          ) : (
+            <div className="py-4 text-center">Loading shift details...</div>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={updateShiftFromDialog}>Save Changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1212,7 +1161,6 @@ const deleteShiftFromFirebase = useCallback(async (shift) => {
           background-color: #15803d; /* Green background */
           border-color: #166534; /* Darker green border */
           color: white;
-          cursor: pointer; /* Add pointer cursor to indicate clickable */
         }
         .vis-item.vis-selected {
           border-color:rgb(49, 62, 147);
