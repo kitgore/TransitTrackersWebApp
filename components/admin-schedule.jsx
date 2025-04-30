@@ -1556,12 +1556,12 @@ export default function ShiftScheduler() {
                   >
                     <option value="">Select Vehicle</option>
                     {vehicles
-                      .filter(vehicle => vehicle.status === 'Available')
+                      .filter(vehicle => 
+                        vehicle.status === 'Available' || vehicle.id === editShiftData.vehicleId)
                       .map(vehicle => (
                         <option key={vehicle.id} value={vehicle.id}>
                           {vehicle.name}
-                        </option>
-                    ))}
+                                          </option>))}
                     </select>
                     {vehicleError && <div className="text-red-500 text-sm mt-1">{vehicleError}</div>}
                 </div>

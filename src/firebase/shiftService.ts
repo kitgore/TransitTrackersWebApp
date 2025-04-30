@@ -73,7 +73,7 @@ const getScheduleDocRef = (date: string) => {
 };
 
 // Get shifts collection for a specific date
-const getShiftsCollection = (date: string) => {
+export const getShiftsCollection = (date: string) => {
   const scheduleRef = getScheduleDocRef(date);
   return collection(scheduleRef, 'shifts');
 };
@@ -138,6 +138,7 @@ export const createShift = async (shiftData: Omit<Shift, 'id' | 'createdAt' | 'u
     throw error;
   }
 };
+
 
 // Update an existing shift
 export const updateShift = async (date: string, id: string, shiftData: Partial<Shift>): Promise<Shift> => {
