@@ -1,6 +1,6 @@
 'use client'; 
 import { useState, useEffect, useCallback } from 'react';
-import { collection, getDocs, doc, updateDoc, addDoc, deleteDoc } from "firebase/firestore";
+import { onSnapshot, collection, getDocs, doc, updateDoc, addDoc, deleteDoc } from "firebase/firestore";
 import { db } from '@/src/firebase/config';
 import { AppSidebar } from "@/components/app-sidebar";
 import { ScrollArea, ScrollBar } from "@/components/bus-status-scrollable";
@@ -14,6 +14,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useRouter } from 'next/navigation';
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Switch } from '@/components/ui/switch';
+import VehicleStatusWatcher from "@/components/vehicleStatusWatcher";
 
 interface Vehicle {
     id: string;
@@ -43,22 +44,29 @@ export default function AdminPage() {
     const [vehicleToRemove, setVehicleToRemove] = useState<Vehicle | null>(null);
     const [plateInput, setPlateInput] = useState<string>("");
 
-    const fetchVehicles = useCallback(async () => {
+    const fetchVehicles = useCallback(() => {
         if (!user) return;
-
-        const querySnapshot = await getDocs(collection(db, "vehicles"));
-        const vehicleList: Vehicle[] = querySnapshot.docs.map(doc => ({
-            id: doc.id,
-            name: doc.data().name || "",
-            vin: doc.data().vin || "",
-            licensePlate: doc.data().licensePlate || "",
-            status: doc.data().status || "Available",
-            note: doc.data().note || "",
-            adaAccessible: doc.data().adaAccessible ?? false // default to false if undefined
-        }));
-        setVehicles(vehicleList);
+    
+        const vehiclesRef = collection(db, "vehicles");
+    
+        // Set up real-time listener
+        const unsubscribe = onSnapshot(vehiclesRef, (querySnapshot) => {
+            const vehicleList: Vehicle[] = querySnapshot.docs.map(doc => ({
+                id: doc.id,
+                name: doc.data().name || "",
+                vin: doc.data().vin || "",
+                licensePlate: doc.data().licensePlate || "",
+                status: doc.data().status || "Available",
+                note: doc.data().note || "",
+                adaAccessible: doc.data().adaAccessible ?? false // default to false if undefined
+            }));
+            setVehicles(vehicleList);
+        });
+    
+        // Clean up the listener when the component is unmounted or when user changes
+        return () => unsubscribe();
     }, [user]);
-
+    
     useEffect(() => {
         if (!loading && user) {
             fetchVehicles();
@@ -191,6 +199,7 @@ export default function AdminPage() {
     return (
        <TooltipProvider>
         <AppSidebar>
+            <VehicleStatusWatcher /> {/* Starts the periodic updater immediately */}
             <div className="h-full flex-1 flex-col space-y-8 p-8 md:flex">
                 <div className="flex items-center justify-between space-y-2">
                     <h2 className="text-2xl font-bold tracking-tight">Manage Vehicles</h2>
@@ -220,29 +229,37 @@ export default function AdminPage() {
                                                 </PopoverTrigger>
                                                 {selectedVehicle?.id === vehicle.id && (
                                                     <PopoverContent className="w-72 p-4 space-y-4">
-                                                        <h4 className="text-sm font-medium">Update Status for {vehicle.name}</h4>
-
+                                                    <h4 className="text-sm font-medium">Update Status for {vehicle.name}</h4>
+                                              
+                                                    {vehicle.status === "In Use" ? (
+                                                      <div className="text-red-500 font-medium">
+                                                        This vehicle is being driven, you cannot change the status.
+                                                      </div>
+                                                    ) : (
+                                                      <>
                                                         <Select value={status} onValueChange={setStatus}>
-                                                            <SelectTrigger className="w-full">
-                                                                <SelectValue placeholder="Select Status" />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                <SelectItem value="Available">Available</SelectItem>
-                                                                <SelectItem value="Out of Service">Out of Service</SelectItem>
-                                                            </SelectContent>
+                                                          <SelectTrigger className="w-full">
+                                                            <SelectValue placeholder="Select Status" />
+                                                          </SelectTrigger>
+                                                          <SelectContent>
+                                                            <SelectItem value="Available">Available</SelectItem>
+                                                            <SelectItem value="Out of Service">Out of Service</SelectItem>
+                                                          </SelectContent>
                                                         </Select>
-
+                                              
                                                         <Input
-                                                            value={note}
-                                                            onChange={(e) => setNote(e.target.value)}
-                                                            placeholder="Enter optional note"
+                                                          value={note}
+                                                          onChange={(e) => setNote(e.target.value)}
+                                                          placeholder="Enter optional note"
                                                         />
-
-                                                        <div className="flex justify-end space-x-2">
-                                                            <Button onClick={handleCancel}>Cancel</Button>
-                                                            <Button onClick={handleSave}>Save</Button>
-                                                        </div>
-                                                    </PopoverContent>
+                                                      </>
+                                                    )}
+                                              
+                                                    <div className="flex justify-end space-x-2">
+                                                      <Button onClick={handleCancel}>Cancel</Button>
+                                                      {vehicle.status !== "In Use" && <Button onClick={handleSave}>Save</Button>}
+                                                    </div>
+                                                  </PopoverContent>
                                                 )}
                                             </Popover>
                                         </div>

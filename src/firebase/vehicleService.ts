@@ -1,5 +1,6 @@
 import { collection, doc, getDocs, getDoc, updateDoc, query, where, Timestamp, serverTimestamp } from 'firebase/firestore';
 import { db } from './config';
+import { getShiftsCollection } from './shiftService';
 
 // Vehicle interface
 export interface Vehicle {
@@ -46,6 +47,58 @@ export const fetchVehiclesByStatus = async (status: string): Promise<Vehicle[]> 
     throw error;
   }
 };
+
+export const setVehicleStatusToInUseForCurrentShift = async (): Promise<void> => {
+  console.log("set vehicle status called");
+
+  try {
+    const currentDateTime = new Date();
+    const currentDate = currentDateTime.toISOString().split('T')[0];
+    const shiftsSnapshot = await getDocs(getShiftsCollection(currentDate));
+
+    const activeVehicleIds = new Set<string>();
+
+    shiftsSnapshot.forEach(docSnap => {
+      const data = docSnap.data();
+      if (!data.vehicleId || data.vehicleId === "Select") return;
+
+      const start = data.start instanceof Timestamp ? data.start.toDate() : new Date(data.start);
+      const end = data.end instanceof Timestamp ? data.end.toDate() : new Date(data.end);
+
+      if (currentDateTime >= start && currentDateTime <= end) {
+        activeVehicleIds.add(data.vehicleId);
+      }
+    });
+
+    const vehiclesSnapshot = await getDocs(collection(db, "vehicles"));
+
+    for (const vehicleDoc of vehiclesSnapshot.docs) {
+      const vehicleId = vehicleDoc.id;
+      const isActive = activeVehicleIds.has(vehicleId);
+      const currentStatus = vehicleDoc.data().status;
+
+      // Skip updating the vehicle status if it's "Out of Service"
+      if (currentStatus === "Out of Service") {
+        console.log(`Vehicle ${vehicleId} status is "Out of Service", skipping update.`);
+        continue;
+      }
+
+      const desiredStatus = isActive ? "In Use" : "Available";
+
+      // Only update the status if it's not already the desired status
+      if (currentStatus !== desiredStatus) {
+        await updateDoc(doc(db, "vehicles", vehicleId), {
+          status: desiredStatus
+        });
+        console.log(`Vehicle ${vehicleId} status set to ${desiredStatus}`);
+      }
+    }
+
+  } catch (error) {
+    console.error("Error setting vehicle statuses:", error);
+  }
+};
+
 
 // Update vehicle status
 export const updateVehicleStatus = async (vehicleId: string, status: string, note?: string): Promise<void> => {
