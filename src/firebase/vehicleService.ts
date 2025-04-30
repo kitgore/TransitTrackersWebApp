@@ -54,8 +54,9 @@ export const setVehicleStatusToInUseForCurrentShift = async (): Promise<void> =>
     const currentDate = currentDateTime.toISOString().split('T')[0];
     const shiftsSnapshot = await getDocs(getShiftsCollection(currentDate));
 
-    const activeVehicleIds = new Set<string>();
+    const activeVehicleToDriverNameMap = new Map<string, string>();
 
+    // Step 1: Identify active vehicles and store driver name
     shiftsSnapshot.forEach(docSnap => {
       const data = docSnap.data();
       if (!data.vehicleId || data.vehicleId === "Select") return;
@@ -64,18 +65,19 @@ export const setVehicleStatusToInUseForCurrentShift = async (): Promise<void> =>
       const end = data.end instanceof Timestamp ? data.end.toDate() : new Date(data.end);
 
       if (currentDateTime >= start && currentDateTime <= end) {
-        activeVehicleIds.add(data.vehicleId);
+        const driverName = data.name || "Unknown Driver";
+        activeVehicleToDriverNameMap.set(data.vehicleId, driverName);
       }
     });
 
+    // Step 2: Update vehicle statuses
     const vehiclesSnapshot = await getDocs(collection(db, "vehicles"));
 
     for (const vehicleDoc of vehiclesSnapshot.docs) {
       const vehicleId = vehicleDoc.id;
-      const isActive = activeVehicleIds.has(vehicleId);
+      const isActive = activeVehicleToDriverNameMap.has(vehicleId);
       const currentStatus = vehicleDoc.data().status;
 
-      // Skip updating the vehicle status if it's "Out of Service"
       if (currentStatus === "Out of Service") {
         console.log(`Vehicle ${vehicleId} status is "Out of Service", skipping update.`);
         continue;
@@ -83,13 +85,23 @@ export const setVehicleStatusToInUseForCurrentShift = async (): Promise<void> =>
 
       const desiredStatus = isActive ? "In Use" : "Available";
 
-      // Only update the status if it's not already the desired status
       if (currentStatus !== desiredStatus) {
-        await updateDoc(doc(db, "vehicles", vehicleId), {
+        const updateData: any = {
           status: desiredStatus
-        });
-        console.log(`Vehicle ${vehicleId} status set to ${desiredStatus}`);
+        };
+      
+        if (isActive) {
+          const driverName = activeVehicleToDriverNameMap.get(vehicleId) || "Unknown Driver";
+          updateData.note = `Being Driven by ${driverName}`; // update the note as well
+          console.log(`Vehicle ${vehicleId} set to 'In Use' by ${driverName}`);
+        } else {
+          updateData.note = ""; // Optional: clear the note
+          console.log(`Vehicle ${vehicleId} set to 'Available'`);
+        }
+      
+        await updateDoc(doc(db, "vehicles", vehicleId), updateData);
       }
+      
     }
 
   } catch (error) {
