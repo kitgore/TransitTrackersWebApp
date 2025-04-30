@@ -66,6 +66,28 @@ interface FirestoreShift extends Omit<Shift, 'createdAt' | 'updatedAt'> {
   updatedAt: FieldValue;
 }
 
+// Add new types for drafts
+interface Draft {
+  id?: string;
+  firestoreId?: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  status: 'DRAFT' | 'PUBLISHED';
+  shifts?: {
+    [date: string]: {
+      [shiftId: string]: Shift;
+    };
+  };
+  createdAt?: Date | Timestamp;
+  updatedAt?: Date | Timestamp;
+}
+
+interface FirestoreDraft extends Omit<Draft, 'createdAt' | 'updatedAt'> {
+  createdAt: FieldValue;
+  updatedAt: FieldValue;
+}
+
 // Get or create a schedule document for a specific date
 const getScheduleDocRef = (date: string) => {
   // Format: "YYYY-MM-DD"
@@ -549,5 +571,150 @@ export const fetchShiftsByUser = async (userId: string): Promise<Shift[]> => {
   } catch (error) {
     console.error('[fetchShiftsByUser] Error:', error);
     return []; // Return empty array instead of throwing
+  }
+};
+
+// Get or create a draft document
+const getDraftDocRef = (draftId: string) => {
+  return doc(db, 'schedule-drafts', draftId);
+};
+
+// Create a new draft
+export const createDraft = async (draftData: Omit<Draft, 'id' | 'createdAt' | 'updatedAt'>): Promise<Draft> => {
+  try {
+    const dataWithTimestamp: FirestoreDraft = {
+      ...draftData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+
+    const draftsCollection = collection(db, 'schedule-drafts');
+    const docRef = await addDoc(draftsCollection, dataWithTimestamp);
+
+    return {
+      ...draftData,
+      id: docRef.id,
+      firestoreId: docRef.id,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+  } catch (error) {
+    console.error('Error creating draft:', error);
+    throw error;
+  }
+};
+
+// Get a draft by ID
+export const getDraft = async (draftId: string): Promise<Draft | null> => {
+  try {
+    const draftRef = getDraftDocRef(draftId);
+    const draftDoc = await getDoc(draftRef);
+
+    if (!draftDoc.exists()) {
+      return null;
+    }
+
+    return {
+      ...draftDoc.data(),
+      id: draftDoc.id,
+      firestoreId: draftDoc.id
+    } as Draft;
+  } catch (error) {
+    console.error('Error getting draft:', error);
+    throw error;
+  }
+};
+
+// Update a draft
+export const updateDraft = async (draftId: string, draftData: Partial<Draft>): Promise<void> => {
+  try {
+    const draftRef = getDraftDocRef(draftId);
+    const dataWithTimestamp = {
+      ...draftData,
+      updatedAt: serverTimestamp()
+    };
+
+    await updateDoc(draftRef, dataWithTimestamp);
+  } catch (error) {
+    console.error('Error updating draft:', error);
+    throw error;
+  }
+};
+
+// Delete a draft
+export const deleteDraft = async (draftId: string): Promise<void> => {
+  try {
+    const draftRef = getDraftDocRef(draftId);
+    await deleteDoc(draftRef);
+  } catch (error) {
+    console.error('Error deleting draft:', error);
+    throw error;
+  }
+};
+
+// Get all drafts
+export const getAllDrafts = async (): Promise<Draft[]> => {
+  try {
+    const draftsCollection = collection(db, 'schedule-drafts');
+    const querySnapshot = await getDocs(draftsCollection);
+
+    return querySnapshot.docs.map(doc => ({
+      ...doc.data(),
+      id: doc.id,
+      firestoreId: doc.id
+    })) as Draft[];
+  } catch (error) {
+    console.error('Error getting all drafts:', error);
+    throw error;
+  }
+};
+
+// Get drafts by date range
+export const getDraftsByDateRange = async (startDate: string, endDate: string): Promise<Draft[]> => {
+  try {
+    const draftsCollection = collection(db, 'schedule-drafts');
+    const q = query(
+      draftsCollection,
+      where('startDate', '>=', startDate),
+      where('endDate', '<=', endDate)
+    );
+
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      ...doc.data(),
+      id: doc.id,
+      firestoreId: doc.id
+    })) as Draft[];
+  } catch (error) {
+    console.error('Error getting drafts by date range:', error);
+    throw error;
+  }
+};
+
+// Publish a draft to the main schedule
+export const publishDraft = async (draftId: string): Promise<void> => {
+  try {
+    const draft = await getDraft(draftId);
+    if (!draft || !draft.shifts) {
+      throw new Error('Draft not found or has no shifts');
+    }
+
+    // For each date in the draft
+    for (const [date, shifts] of Object.entries(draft.shifts)) {
+      // For each shift in the date
+      for (const [shiftId, shiftData] of Object.entries(shifts)) {
+        // Create the shift in the main schedule
+        await createShift({
+          ...shiftData,
+          date: date
+        });
+      }
+    }
+
+    // Update draft status to published
+    await updateDraft(draftId, { status: 'PUBLISHED' });
+  } catch (error) {
+    console.error('Error publishing draft:', error);
+    throw error;
   }
 };

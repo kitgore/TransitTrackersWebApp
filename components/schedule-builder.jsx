@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { format } from 'date-fns';
 import GanttTimeline from '@/components/vis-timeline';
 import {
   Dialog,
@@ -28,7 +29,13 @@ import {
   checkVehicleAvailability,
   assignVehicleToShift,
   removeVehicleFromShift,
-  updateShiftWithVehicle
+  updateShiftWithVehicle,
+  createDraft,
+  getDraft,
+  updateDraft,
+  deleteDraft,
+  getAllDrafts,
+  publishDraft
 } from '@/src/firebase/shiftService';
 import { useBaseSchedule, SHIFT_STATUS, DATE_FORMATS } from './base-schedule';
 
@@ -144,6 +151,14 @@ export default function ScheduleBuilder() {
   // Add a ref to track the last loaded date
   const lastLoadedDateRef = useRef(null);
 
+  // Add new state for drafts
+  const [drafts, setDrafts] = useState([]);
+  const [selectedDraft, setSelectedDraft] = useState(null);
+  const [isDraftMode, setIsDraftMode] = useState(false);
+  const [draftName, setDraftName] = useState('');
+  const [draftStartDate, setDraftStartDate] = useState(new Date());
+  const [draftEndDate, setDraftEndDate] = useState(new Date());
+
   // Function to get day of week from date
   const getDayOfWeek = (date) => {
     const days = ['Su', 'M', 'Tu', 'W', 'Th', 'F', 'Sa'];
@@ -170,25 +185,20 @@ export default function ScheduleBuilder() {
   const fetchShiftsFromFirebase = useCallback(async () => {
     const dateISO = formatDate(currentDate, DATE_FORMATS.ISO);
     try {
-      console.log(`Fetching shifts for date: ${dateISO}`);
-      const shifts = await fetchShiftsByDate(dateISO);
-      
-      // Filter shifts to only show those that should be visible on current date
-      const filteredShifts = shifts.filter(shift => shouldShowRepeatingShift(shift, currentDate));
-      
-      // Ensure each shift has a date property
-      const shiftsWithDate = filteredShifts.map(shift => ({
-        ...shift,
-        date: dateISO, // Explicitly add the date
-      }));
-      
-      console.log(`Found ${shiftsWithDate.length} shifts for date ${dateISO}`);
-      return shiftsWithDate;
+      if (isDraftMode && selectedDraft) {
+        // Get shifts from draft
+        const draftShifts = selectedDraft.shifts?.[dateISO] || {};
+        return Object.values(draftShifts);
+      } else {
+        // Get shifts from main schedule
+        const shifts = await fetchShiftsByDate(dateISO);
+        return shifts.filter(shift => shouldShowRepeatingShift(shift, currentDate));
+      }
     } catch (error) {
       console.error(`Error fetching shifts: ${error.message}`);
       return [];
     }
-  }, [currentDate, formatDate]);
+  }, [currentDate, formatDate, isDraftMode, selectedDraft]);
 
   // Function to toggle repeat day
   const toggleRepeatDay = (day, isEdit = false) => {
@@ -677,17 +687,27 @@ export default function ScheduleBuilder() {
         updatedAt: new Date()
       };
 
-      // Save to Firebase
-      const savedShift = await createFirebaseShift(shift);
-      console.log('Shift saved to Firebase:', savedShift);
-
-      // Update local state
-      setShifts(prev => [...prev, savedShift]);
+      if (isDraftMode && selectedDraft) {
+        // Add to draft
+        const updatedDraft = {
+          ...selectedDraft,
+          shifts: {
+            ...selectedDraft.shifts,
+            [shift.date]: {
+              ...selectedDraft.shifts?.[shift.date],
+              [shift.id]: shift
+            }
+          }
+        };
+        await updateDraft(selectedDraft.id, updatedDraft);
+        setSelectedDraft(updatedDraft);
+      } else {
+        // Save to Firebase
+        const savedShift = await createFirebaseShift(shift);
+        setShifts(prev => [...prev, savedShift]);
+      }
       
-      // Close the dialog
       setCreateDialogOpen(false);
-      
-      // Reset the new shift data
       setNewShiftData({
         id: '',
         name: SHIFT_STATUS.AVAILABLE,
@@ -977,41 +997,158 @@ export default function ScheduleBuilder() {
     }
   }, [roles, getRoleNameById, formatTimeInput]);
 
+  // Add new functions for draft management
+  const loadDrafts = async () => {
+    try {
+      const allDrafts = await getAllDrafts();
+      setDrafts(allDrafts);
+    } catch (error) {
+      console.error('Error loading drafts:', error);
+    }
+  };
+
+  const handleCreateDraft = async () => {
+    try {
+      const newDraft = await createDraft({
+        name: draftName,
+        startDate: formatDate(draftStartDate, DATE_FORMATS.ISO),
+        endDate: formatDate(draftEndDate, DATE_FORMATS.ISO),
+        status: 'DRAFT',
+        shifts: {}
+      });
+
+      setDrafts(prev => [...prev, newDraft]);
+      setDraftName('');
+      setSelectedDraft(newDraft);
+      setIsDraftMode(true);
+    } catch (error) {
+      console.error('Error creating draft:', error);
+    }
+  };
+
+  const handlePublishDraft = async () => {
+    if (!selectedDraft) return;
+    
+    try {
+      await publishDraft(selectedDraft.id);
+      setDrafts(prev => prev.map(draft => 
+        draft.id === selectedDraft.id ? { ...draft, status: 'PUBLISHED' } : draft
+      ));
+      setSelectedDraft(null);
+      setIsDraftMode(false);
+    } catch (error) {
+      console.error('Error publishing draft:', error);
+    }
+  };
+
+  const handleDeleteDraft = async (draftId) => {
+    try {
+      await deleteDraft(draftId);
+      setDrafts(prev => prev.filter(draft => draft.id !== draftId));
+      if (selectedDraft?.id === draftId) {
+        setSelectedDraft(null);
+        setIsDraftMode(false);
+      }
+    } catch (error) {
+      console.error('Error deleting draft:', error);
+    }
+  };
+
   return (
     <div className="container mx-auto p-4">
-      <div className="flex items-center gap-2 mb-2">
-        <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setCurrentDate(prev => new Date(prev.getTime() - 86400000))}>
-          <ChevronLeft className="h-6 w-6" />
-        </Button>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              variant={"outline"}
-              className={cn(
-                "w-[280px] h-10 justify-start text-left font-normal",
-                !currentDate && "text-muted-foreground"
-              )}
-            >
-              <CalendarIcon className="mr-2 h-5 w-5" />
-              <span>{formatDateHeader(currentDate)}</span>
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0">
-            <Calendar
-              mode="single"
-              selected={currentDate}
-              onSelect={(date) => {
-                if (date) {
-                  setCurrentDate(date);
-                }
-              }}
-              initialFocus
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setCurrentDate(prev => new Date(prev.getTime() - 86400000))}>
+            <ChevronLeft className="h-6 w-6" />
+          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={"outline"}
+                className={cn(
+                  "w-[280px] h-10 justify-start text-left font-normal",
+                  !currentDate && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-5 w-5" />
+                <span>{formatDateHeader(currentDate)}</span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              <Calendar
+                mode="single"
+                selected={currentDate}
+                onSelect={(date) => {
+                  if (date) {
+                    setCurrentDate(date);
+                  }
+                }}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+          <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setCurrentDate(prev => new Date(prev.getTime() + 86400000))}>
+            <ChevronRight className="h-6 w-6" />
+          </Button>
+        </div>
+
+        {!isDraftMode ? (
+          <div className="flex items-center gap-4">
+            <Input
+              placeholder="Draft Name"
+              value={draftName}
+              onChange={(e) => setDraftName(e.target.value)}
+              className="w-48"
             />
-          </PopoverContent>
-        </Popover>
-        <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setCurrentDate(prev => new Date(prev.getTime() + 86400000))}>
-          <ChevronRight className="h-6 w-6" />
-        </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="w-[200px]">
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {format(draftStartDate, "MMM d")} - {format(draftEndDate, "MMM d")}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <div className="p-4">
+                  <h4 className="font-medium mb-2">Start Date</h4>
+                  <Calendar
+                    mode="single"
+                    selected={draftStartDate}
+                    onSelect={setDraftStartDate}
+                    initialFocus
+                  />
+                  <h4 className="font-medium mb-2 mt-4">End Date</h4>
+                  <Calendar
+                    mode="single"
+                    selected={draftEndDate}
+                    onSelect={setDraftEndDate}
+                    initialFocus
+                  />
+                </div>
+              </PopoverContent>
+            </Popover>
+            <Button 
+              onClick={handleCreateDraft}
+              disabled={!draftName || !draftStartDate || !draftEndDate}
+            >
+              Create Draft
+            </Button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-gray-500">
+              Editing Draft: {selectedDraft?.name}
+            </span>
+            <Button variant="outline" onClick={() => {
+              setSelectedDraft(null);
+              setIsDraftMode(false);
+            }}>
+              Exit Draft
+            </Button>
+            <Button onClick={handlePublishDraft}>
+              Publish Draft
+            </Button>
+          </div>
+        )}
       </div>
       
       {roles.length > 0 && roles[0].id !== 'default' ? (
