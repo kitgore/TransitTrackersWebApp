@@ -39,6 +39,16 @@ interface Shift {
   userId?: string | null;
   vehicleId?: string | null;
   vehicleName?: string | null;
+  repeating?: boolean;
+  repeatDays?: {
+    M: boolean;
+    Tu: boolean;
+    W: boolean;
+    Th: boolean;
+    F: boolean;
+    Sa: boolean;
+    Su: boolean;
+  };
   createdAt?: Date | Timestamp;
   updatedAt?: Date | Timestamp;
 }

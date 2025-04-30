@@ -32,7 +32,7 @@ import {
 } from '@/src/firebase/shiftService';
 import { useBaseSchedule, SHIFT_STATUS, DATE_FORMATS } from './base-schedule';
 
-export default function ShiftScheduler() {
+export default function ScheduleBuilder() {
   // Get base functionality from useBaseSchedule hook
   const {
     timelineRef,
@@ -117,27 +117,6 @@ export default function ShiftScheduler() {
     }
   });
 
-  // Function to toggle repeat day
-  const toggleRepeatDay = (day, isEdit = false) => {
-    if (isEdit) {
-      setEditShiftData(prev => ({
-        ...prev,
-        repeatDays: {
-          ...prev.repeatDays,
-          [day]: !prev.repeatDays[day]
-        }
-      }));
-    } else {
-      setNewShiftData(prev => ({
-        ...prev,
-        repeatDays: {
-          ...prev.repeatDays,
-          [day]: !prev.repeatDays[day]
-        }
-      }));
-    }
-  };
-
   // State for vehicles
   const [vehicles, setVehicles] = useState([]);
   
@@ -165,17 +144,40 @@ export default function ShiftScheduler() {
   // Add a ref to track the last loaded date
   const lastLoadedDateRef = useRef(null);
 
-  // ========== Firebase Integration Functions ==========
-  
-  // Fetch shifts from Firebase
+  // Function to get day of week from date
+  const getDayOfWeek = (date) => {
+    const days = ['Su', 'M', 'Tu', 'W', 'Th', 'F', 'Sa'];
+    return days[date.getDay()];
+  };
+
+  // Function to check if a shift should be shown on current date
+  const shouldShowRepeatingShift = (shift, currentDate) => {
+    if (!shift.repeatDays) return true;
+    
+    const shiftDay = getDayOfWeek(new Date(shift.startTimeISO));
+    const currentDay = getDayOfWeek(currentDate);
+    
+    return shift.repeatDays[currentDay];
+  };
+
+  // Function to check if a shift is repeating
+  const isShiftRepeating = (shift) => {
+    if (!shift.repeatDays) return false;
+    return Object.values(shift.repeatDays).some(day => day === true);
+  };
+
+  // Modified fetchShiftsFromFirebase to handle repeating shifts
   const fetchShiftsFromFirebase = useCallback(async () => {
     const dateISO = formatDate(currentDate, DATE_FORMATS.ISO);
     try {
       console.log(`Fetching shifts for date: ${dateISO}`);
       const shifts = await fetchShiftsByDate(dateISO);
       
+      // Filter shifts to only show those that should be visible on current date
+      const filteredShifts = shifts.filter(shift => shouldShowRepeatingShift(shift, currentDate));
+      
       // Ensure each shift has a date property
-      const shiftsWithDate = shifts.map(shift => ({
+      const shiftsWithDate = filteredShifts.map(shift => ({
         ...shift,
         date: dateISO, // Explicitly add the date
       }));
@@ -188,65 +190,26 @@ export default function ShiftScheduler() {
     }
   }, [currentDate, formatDate]);
 
-  // Save shift to Firebase
-  const saveShiftToFirebase = useCallback(async (shift) => {
-    const savedShift = await createFirebaseShift(shift);
-    return savedShift;
-  }, []);
-
-  // Update shift in Firebase
-  const updateShiftInFirebase = useCallback(async (shift) => {
-    try {
-      // Extract the required data
-      const date = shift.date;
-      const id = shift.id;
-      
-      if (!date) {
-        throw new Error("Missing date in shift data");
-      }
-      
-      if (!id) {
-        throw new Error("Missing ID in shift data");
-      }
-      
-      console.log(`Updating shift with path: schedules/${date}/shifts/${id}`);
-      
-      // Remove properties that could cause issues with Firestore
-      const shiftDataForFirebase = { ...shift };
-      
-      // Pass the date and the ID
-      const updatedShift = await updateFirebaseShift(date, id, shiftDataForFirebase);
-      return updatedShift;
-    } catch (error) {
-      console.error("Failed to update shift:", error);
-      throw error;
+  // Function to toggle repeat day
+  const toggleRepeatDay = (day, isEdit = false) => {
+    if (isEdit) {
+      setEditShiftData(prev => ({
+        ...prev,
+        repeatDays: {
+          ...prev.repeatDays,
+          [day]: !prev.repeatDays[day]
+        }
+      }));
+    } else {
+      setNewShiftData(prev => ({
+        ...prev,
+        repeatDays: {
+          ...prev.repeatDays,
+          [day]: !prev.repeatDays[day]
+        }
+      }));
     }
-  }, []);
-
-  // Delete from Firebase
-  const deleteShiftFromFirebase = useCallback(async (shift) => {
-    try {
-      // Extract the required data from the shift object
-      const date = shift.date;
-      const id = shift.id;
-      
-      if (!date) {
-        throw new Error("Missing date in shift data");
-      }
-      
-      if (!id) {
-        throw new Error("Missing ID in shift data");
-      }
-      
-      console.log(`Deleting shift with path: schedules/${date}/shifts/${id}`);
-      
-      await deleteFirebaseShift(date, id);
-      return true;
-    } catch (error) {
-      console.error("Failed to delete shift:", error);
-      throw error;
-    }
-  }, []);
+  };
 
   // Load users from Firebase
   useEffect(() => {
@@ -278,22 +241,6 @@ export default function ShiftScheduler() {
           }));
           console.log('Formatted roles:', formattedRoles);
           setRoles(formattedRoles);
-          
-          // Update any existing shifts with the correct role names
-          setShifts(prevShifts => {
-            return prevShifts.map(shift => {
-              // Find the role for this shift
-              const role = formattedRoles.find(r => r.id === shift.role);
-              if (role) {
-                // Update the shift with the correct role name
-                return {
-                  ...shift,
-                  roleName: role.content
-                };
-              }
-              return shift;
-            });
-          });
         }
       } catch (error) {
         console.error('Error loading roles:', error);
@@ -302,7 +249,7 @@ export default function ShiftScheduler() {
     
     loadRoles();
   }, []);
-  
+
   // Load vehicles from Firebase
   useEffect(() => {
     const loadVehicles = async () => {
@@ -320,132 +267,68 @@ export default function ShiftScheduler() {
     
     loadVehicles();
   }, []);
-  
-  // Check vehicle availability when shift times change
+
+  // Update options when currentDate changes
   useEffect(() => {
-    const checkAvailability = async () => {
-      const vehicleId = newShiftData.vehicleId || editShiftData.vehicleId;
-      const startTime = newShiftData.startTime || editShiftData.startTime;
-      const endTime = newShiftData.endTime || editShiftData.endTime;
-      const currentShiftId = editShiftData.id || null; // ⬅️ get current shift ID if editing
-  
-      if (vehicleId && startTime && endTime) {
-        try {
-          console.log(`Checking availability for vehicle ${vehicleId} from ${startTime.toISOString()} to ${endTime.toISOString()}`);
-          const result = await checkVehicleAvailability(
-            vehicleId,
-            startTime.toISOString(),
-            endTime.toISOString(),
-            editShiftData.id // Pass the shift ID to avoid conflicts with the current shift
-          );
-  
-          setVehicleAvailability(prev => ({
-            ...prev,
-            [vehicleId]: result
-          }));
-  
-          if (!result.available) {
-            setVehicleError(`Vehicle is not available during this time. It has ${result.conflictingShifts.length} conflicting shift(s).`);
-          } else {
-            setVehicleError('');
+    if (timelineRef.current) {
+      // Set the timeline range to cover the entire day
+      const startOfDay = new Date(currentDate);
+      startOfDay.setHours(5, 0, 0, 0);  // Start at 5 AM
+      
+      const endOfDay = new Date(currentDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      
+      const newOptions = {
+        ...options,
+        min: startOfDay,
+        max: endOfDay,
+        start: startOfDay,
+        end: endOfDay,
+        zoomMin: 1000 * 60 * 60, // 1 hour
+        zoomMax: 1000 * 60 * 60 * 24, // 24 hours
+        showCurrentTime: true,
+        showMajorLabels: false, // Hide major labels completely
+        showMinorLabels: true,
+        format: {
+          minorLabels: {
+            hour: 'hA',
+            minute: 'hA'
           }
-        } catch (error) {
-          console.error('Error checking vehicle availability:', error);
-          setVehicleError('Error checking vehicle availability. Please try again.');
+        },
+        timeAxis: {
+          scale: 'hour',
+          step: 1
+        },
+        stack: false,
+        verticalScroll: true,
+        horizontalScroll: true,
+        moveable: true,
+        zoomable: true,
+        selectable: true,
+        multiselect: false,
+        orientation: {
+          axis: 'top',
+          item: 'top'
+        },
+        margin: {
+          axis: 0,
+          item: {
+            horizontal: 0,
+            vertical: 0
+          }
+        },
+        groupHeightMode: 'fixed',
+        groupHeight: 50,
+        groupOrder: 'content',
+        groupTemplate: function(group) {
+          return group ? group.content : '';
         }
-      }
-    };
-  
-    checkAvailability();
-  }, [
-    newShiftData.vehicleId, 
-    newShiftData.startTime, 
-    newShiftData.endTime,
-    editShiftData.vehicleId,
-    editShiftData.startTime,
-    editShiftData.endTime,
-    editShiftData.id
-  ]);
-  
-  
-  // ========== Shift Management Functions ==========
-  
-  // Function to check if a shift is repeating
-  const isShiftRepeating = (shift) => {
-    if (!shift.repeatDays) return false;
-    return Object.values(shift.repeatDays).some(day => day === true);
-  };
-
-  // Function to create shift object
-  const createShiftObject = ({
-    name,
-    startTime,
-    endTime,
-    role,
-    userId,
-    vehicleId,
-    vehicleName,
-    repeatDays
-  }) => {
-    // Ensure we have proper Date objects
-    const start = startTime instanceof Date ? startTime : new Date(startTime);
-    const end = endTime instanceof Date ? endTime : new Date(endTime);
-    
-    const timeDisplay = `${formatTimeInput(start)}-${formatTimeInput(end)}`;
-    const status = isShiftAvailable(name) ? SHIFT_STATUS.AVAILABLE : SHIFT_STATUS.ASSIGNED;
-    const dateISO = formatDate(currentDate, DATE_FORMATS.ISO);
-    
-    // Get role name - roles should be loaded at this point
-    const roleName = getRoleNameById(role);
-    
-    // Determine the class based on status and repeating
-    let className = 'shift-item';
-    if (status === SHIFT_STATUS.AVAILABLE) {
-      className += ' available-shift';
-    }
-    if (isShiftRepeating({ repeatDays })) {
-      className += ' repeating-shift';
-    }
-    
-    return {
-      // Don't set an id field - Firebase will generate this
-      group: role,
-      content: `${name} | ${timeDisplay}`,
-      start: start.toISOString(), // Ensure ISO string format
-      end: end.toISOString(), // Ensure ISO string format
-      className,
-      name,
-      status,
-      userId,
+      };
       
-      // For Firestore
-      role,
-      date: dateISO,
-      startTimeISO: start.toISOString(),
-      endTimeISO: end.toISOString(),
-      startTimeFormatted: formatTimeInput(start),
-      endTimeFormatted: formatTimeInput(end),
-      roleName: roleName,
-      vehicleId,
-      vehicleName,
-      repeatDays,
-      
-      // Timestamps will be added in Firebase service
-    };
-  };
-
-  // Force timeline redraw after shifts are loaded
-  useEffect(() => {
-    if (shifts.length > 0 && timelineRef.current) {
-      console.log('Forcing timeline redraw after shifts loaded');
-      // Small delay to ensure DOM is ready
-      setTimeout(() => {
-        if (timelineRef.current) {
-          timelineRef.current.redraw();
-        }
-      }, 100);
+      setOptions(newOptions);
+      timelineRef.current.setOptions(newOptions);
     }
-  }, [shifts]);
+  }, [currentDate]);
 
   // Initialize shifts with consistent date format after component mounts
   useEffect(() => {
@@ -495,31 +378,12 @@ export default function ShiftScheduler() {
           
           // Format the shifts for the timeline
           const formattedShifts = firebaseShifts.map(shift => {
-            console.log('Processing shift:', {
-              id: shift.id,
-              startTimeISO: shift.startTimeISO,
-              endTimeISO: shift.endTimeISO,
-              role: shift.role,
-              status: shift.status
-            });
-            
-            // Check if the role exists
-            const roleExists = roles.some(r => r.id === shift.role);
-            if (!roleExists) {
-              console.warn(`Shift ${shift.id} references invalid role ${shift.role}`);
-              return null;
-            }
-            
             try {
               // Convert Firestore Timestamp to Date if needed
               let startDate, endDate;
               
               if (shift.startTimeISO && typeof shift.startTimeISO === 'object' && 'seconds' in shift.startTimeISO) {
                 startDate = new Date(shift.startTimeISO.seconds * 1000);
-                console.log('Converted Firestore Timestamp to Date:', {
-                  original: shift.startTimeISO,
-                  converted: startDate
-                });
               } else {
                 startDate = new Date(shift.startTimeISO);
               }
@@ -544,15 +408,14 @@ export default function ShiftScheduler() {
                 id: shift.id,
                 group: shift.role,
                 content: `${shift.name} | ${shift.startTimeFormatted}-${shift.endTimeFormatted}`,
-                start: startDate.toISOString(),
-                end: endDate.toISOString(),
+                start: startDate,
+                end: endDate,
                 className: shift.status === SHIFT_STATUS.AVAILABLE 
-                  ? 'shift-item available-shift' + (shift.repeating ? ' repeating-shift' : '')
-                  : 'shift-item' + (shift.repeating ? ' repeating-shift' : ''),
+                  ? 'shift-item available-shift' + (isShiftRepeating(shift) ? ' repeating-shift' : '')
+                  : 'shift-item' + (isShiftRepeating(shift) ? ' repeating-shift' : ''),
                 date: shift.date || currentDateISO,
               };
               
-              console.log('Formatted shift:', formattedShift);
               return formattedShift;
             } catch (err) {
               console.error(`Error formatting shift ${shift.id}:`, err);
@@ -596,331 +459,6 @@ export default function ShiftScheduler() {
     
     loadShifts();
   }, [fetchShiftsFromFirebase, roles, currentDate, formatDate]);
-
-  // Force timeline reinitialization when data is ready
-  useEffect(() => {
-    if (timelineRef.current) {
-      console.log('Timeline reinitialization effect triggered', {
-        shifts: shifts.length,
-        roles: roles.length,
-        currentDate: currentDate
-      });
-      
-      const initializeTimeline = () => {
-        if (timelineRef.current && timelineRef.current.dom && timelineRef.current.dom.root) {
-          console.log('Forcing timeline redraw');
-          const container = timelineRef.current.dom.root;
-          const height = container.clientHeight;
-          const width = container.clientWidth;
-          
-          // Force container resize
-          container.style.height = `${height}px`;
-          container.style.width = `${width}px`;
-          
-          // Set options and redraw
-          timelineRef.current.setOptions(options);
-          timelineRef.current.redraw();
-        } else {
-          console.log('Timeline DOM not ready, retrying in 100ms');
-          setTimeout(initializeTimeline, 100);
-        }
-      };
-      
-      initializeTimeline();
-    }
-  }, [shifts, roles, currentDate, options]);
-
-  // Update options when currentDate changes
-  useEffect(() => {
-    if (timelineRef.current) {
-      const now = new Date();
-      const currentHour = now.getHours();
-      
-      // Calculate the start and end times for the 8-hour window
-      let startHour = currentHour - 4; // Center on current time
-      let endHour = currentHour + 4;
-      
-      // Handle edge cases
-      if (startHour < 5) { // If start would be before 5am
-        startHour = 5;
-        endHour = 13; // Show 5am-1pm
-      } else if (endHour > 24) { // If end would be after midnight
-        endHour = 24;
-        startHour = 16; // Show 4pm-midnight
-      }
-      
-      const newOptions = {
-        ...options,
-        min: new Date(new Date(currentDate).setHours(5, 0, 0, 0)),
-        max: new Date(new Date(currentDate).setHours(24, 0, 0, 0)),
-        start: new Date(new Date(currentDate).setHours(startHour, 0, 0, 0)),
-        end: new Date(new Date(currentDate).setHours(endHour, 0, 0, 0))
-      };
-      setOptions(newOptions);
-      timelineRef.current.setOptions(newOptions);
-    }
-  }, [currentDate]);
-
-  // ========== Event Handlers ==========
-  
-  // Function to handle background clicks
-  const handleBackgroundClick = useCallback((clickEvent) => {
-    console.log('=== handleBackgroundClick ===');
-    console.log('Click event:', clickEvent);
-    
-    if (clickEvent.what === 'background' && clickEvent.group && clickEvent.time) {
-      console.log('✅ Valid background click detected');
-      
-      // Check if roles are loaded
-      if (roles.length === 0 || roles[0].id === 'default') {
-        console.log('❌ Roles not loaded yet, cannot create shift');
-        alert('Please wait for roles to load before creating a shift');
-        return;
-      }
-      
-      // Get the clicked time and group
-      const clickedTime = new Date(clickEvent.time);
-      const role = clickEvent.group;
-      
-      console.log('Processing click:', {
-        clickedTime,
-        role,
-        rolesLoaded: roles.length > 0
-      });
-      
-      // Round time to the nearest half hour for better UX
-      const minutes = clickedTime.getMinutes();
-      clickedTime.setMinutes(minutes < 30 ? 0 : 30);
-      clickedTime.setSeconds(0);
-      clickedTime.setMilliseconds(0);
-      
-      // Calculate end time (start time + 3 hours)
-      const endTime = new Date(clickedTime.getTime() + 3 * 60 * 60 * 1000);
-      
-      // Get role name for display
-      const roleName = getRoleNameById(role);
-      
-      console.log('Setting new shift data:', {
-        startTime: clickedTime,
-        endTime,
-        role,
-        roleName
-      });
-      
-      // Set new shift data for the dialog
-      setNewShiftData({
-        id: `shift${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        name: SHIFT_STATUS.AVAILABLE,
-        startTime: clickedTime,
-        endTime: endTime,
-        role: role,
-        roleName: roleName,
-        formattedStartTime: formatTimeInput(clickedTime),
-        formattedEndTime: formatTimeInput(endTime),
-        status: SHIFT_STATUS.AVAILABLE,
-        userId: null,
-        vehicleId: null,
-        vehicleName: null,
-        repeatDays: {
-          M: false,
-          Tu: false,
-          W: false,
-          Th: false,
-          F: false,
-          Sa: false,
-          Su: false,
-        }
-      });
-      
-      console.log('Opening create dialog');
-      setCreateDialogOpen(true);
-    } else {
-      console.log('❌ Invalid background click:', {
-        what: clickEvent.what,
-        hasGroup: !!clickEvent.group,
-        hasTime: !!clickEvent.time
-      });
-    }
-  }, [roles, getRoleNameById, formatTimeInput]);
-
-  // Function to handle shift editing
-  const handleShiftEdit = useCallback((itemId) => {
-    console.log('=== handleShiftEdit ===');
-    console.log('Opening edit dialog for shift:', itemId);
-    
-    if (timelineRef.current && itemsDatasetRef.current) {
-      try {
-        // First check if we can find the item in the vis-timeline dataset
-        const datasetItem = itemsDatasetRef.current.get(itemId);
-        
-        if (!datasetItem) {
-          console.error('Shift not found in timeline dataset:', itemId);
-          return;
-        }
-        
-        console.log('Shift data found in dataset:', datasetItem);
-        
-        // Try to find the shift in our state array
-        let fullShiftData = shifts.find(s => s.id === itemId);
-        
-        // If not found by direct ID match, create a minimal version
-        if (!fullShiftData) {
-          fullShiftData = {
-            id: itemId,
-            date: formatDate(currentDate, DATE_FORMATS.ISO),
-            ...datasetItem
-          };
-        }
-        
-        // Convert string timestamps to Date objects
-        const startTime = new Date(datasetItem.start);
-        const endTime = new Date(datasetItem.end);
-        
-        // Try to extract the name from the content field
-        let name = SHIFT_STATUS.AVAILABLE;
-        if (datasetItem.content && typeof datasetItem.content === 'string') {
-          const contentParts = datasetItem.content.split('|');
-          name = contentParts[0]?.trim() || SHIFT_STATUS.AVAILABLE;
-        }
-        
-        // Use the roleName from the full shift data
-        const roleName = fullShiftData.roleName || getRoleNameById(datasetItem.group);
-        
-        console.log('Setting edit shift data:', {
-          id: itemId,
-          name,
-          startTime,
-          endTime,
-          role: datasetItem.group,
-          roleName,
-          repeating: fullShiftData.repeating
-        });
-        
-        // Set edit shift data
-        setEditShiftData({
-          id: itemId,
-          name: name,
-          startTime: startTime,
-          endTime: endTime,
-          role: datasetItem.group,
-          roleName: roleName,
-          formattedStartTime: formatTimeInput(startTime),
-          formattedEndTime: formatTimeInput(endTime),
-          status: isShiftAvailable(name) ? SHIFT_STATUS.AVAILABLE : SHIFT_STATUS.ASSIGNED,
-          userId: fullShiftData.userId || null,
-          date: fullShiftData.date || formatDate(currentDate, DATE_FORMATS.ISO),
-          vehicleId: fullShiftData.vehicleId || null,
-          vehicleName: fullShiftData.vehicleName || null,
-          repeatDays: fullShiftData.repeatDays || {
-            M: false,
-            Tu: false,
-            W: false,
-            Th: false,
-            F: false,
-            Sa: false,
-            Su: false,
-          },
-        });
-        
-        console.log('Opening edit dialog');
-        setEditDialogOpen(true);
-      } catch (error) {
-        console.error('Error accessing timeline dataset:', error);
-      }
-    } else {
-      console.error('Timeline or dataset refs not available');
-    }
-  }, [shifts, currentDate, formatDate, formatTimeInput, getRoleNameById, isShiftAvailable]);
-
-  // Set up event listeners in a useEffect
-  useEffect(() => {
-    if (!timelineRef.current) return;
-
-    console.log('Setting up timeline event listeners');
-    
-    // Remove any existing handlers first to avoid duplicates
-    timelineRef.current.off('click');
-    timelineRef.current.off('doubleClick');
-    
-    // Track pointer down state
-    let pointerDownTime = 0;
-    let isPointerDown = false;
-    
-    // Handle pointer down
-    const handlePointerDown = (event) => {
-      if (event.target.closest('.vis-timeline')) {
-        console.log('Pointer down event:', event);
-        isPointerDown = true;
-        pointerDownTime = Date.now();
-      }
-    };
-    
-    // Handle pointer up
-    const handlePointerUp = (event) => {
-      if (event.target.closest('.vis-timeline')) {
-        console.log('Pointer up event:', event);
-        isPointerDown = false;
-      }
-    };
-    
-    // Handle clicks
-    const handleClick = (event) => {
-      console.log('Timeline click:', event);
-      
-      const clickDuration = Date.now() - pointerDownTime;
-      console.log('Click duration:', clickDuration);
-      
-      // If this was a long click (more than 500ms), ignore it
-      if (clickDuration > 150) {
-        console.log('Ignoring long click');
-        return;
-      }
-      
-      // If we're in the middle of a resize operation, ignore the click
-      if (isResizingRef.current) {
-        console.log('Ignoring click during resize operation');
-        return;
-      }
-      
-      // Check if we clicked on a shift
-      if (event.item) {
-        console.log('Shift clicked:', event.item);
-        handleShiftEdit(event.item);
-      } 
-      // Check if we clicked on the background
-      else if (event.what === 'background' && event.group) {
-        console.log('Background clicked:', event);
-        handleBackgroundClick(event);
-      }
-    };
-    
-    // Handle double clicks
-    const handleDoubleClick = (event) => {
-      console.log('Double click event received:', event);
-      
-      if (event.item) {
-        console.log('Double click detected on shift');
-        handleShiftEdit(event.item);
-      }
-    };
-    
-    // Add event listeners
-    document.addEventListener('pointerdown', handlePointerDown);
-    document.addEventListener('pointerup', handlePointerUp);
-    timelineRef.current.on('click', handleClick);
-    timelineRef.current.on('doubleClick', handleDoubleClick);
-    
-    // Cleanup function
-    return () => {
-      console.log('Cleaning up timeline event listeners');
-      document.removeEventListener('pointerdown', handlePointerDown);
-      document.removeEventListener('pointerup', handlePointerUp);
-      if (timelineRef.current) {
-        timelineRef.current.off('click');
-        timelineRef.current.off('doubleClick');
-      }
-    };
-  }, [handleShiftEdit, handleBackgroundClick]);
 
   // Function to handle user selection in create dialog
   const handleUserSelect = (e) => {
@@ -976,113 +514,6 @@ export default function ShiftScheduler() {
     }));
   };
 
-  // Function to add a new shift from the dialog
-  const addShiftFromDialog = async () => {
-    try {
-      if (vehicleError) {
-        alert('Please fix vehicle errors before saving');
-        return;
-      }
-
-      // Create the shift object
-      const shift = createShiftObject({
-        name: newShiftData.name,
-        startTime: newShiftData.startTime,
-        endTime: newShiftData.endTime,
-        role: newShiftData.role,
-        userId: newShiftData.userId,
-        vehicleId: newShiftData.vehicleId,
-        vehicleName: newShiftData.vehicleName,
-        repeatDays: newShiftData.repeatDays,
-      });
-
-      // Save to Firebase
-      const savedShift = await saveShiftToFirebase(shift);
-      console.log('Shift saved to Firebase:', savedShift);
-
-      // Update local state
-      setShifts(prev => [...prev, savedShift]);
-      
-      // Close the dialog
-      setCreateDialogOpen(false);
-      
-      // Reset the new shift data
-      setNewShiftData({
-        id: '',
-        name: SHIFT_STATUS.AVAILABLE,
-        startTime: null,
-        endTime: null,
-        role: '',
-        roleName: '',
-        formattedStartTime: '',
-        formattedEndTime: '',
-        status: SHIFT_STATUS.AVAILABLE,
-        userId: null,
-        vehicleId: null,
-        vehicleName: null,
-        repeatDays: {
-          M: false,
-          Tu: false,
-          W: false,
-          Th: false,
-          F: false,
-          Sa: false,
-          Su: false,
-        }
-      });
-    } catch (error) {
-      console.error('Error adding shift:', error);
-      alert('Failed to add shift. Please try again.');
-    }
-  };
-
-  // Function to handle shift deletion
-  const deleteShift = async () => {
-    try {
-      if (!editShiftData.id) {
-        console.error('No shift ID available for deletion');
-        return;
-      }
-
-      // Delete from Firebase
-      await deleteShiftFromFirebase(editShiftData);
-
-      // Update local state
-      setShifts(prev => prev.filter(shift => shift.id !== editShiftData.id));
-
-      // Close the dialog
-      setEditDialogOpen(false);
-
-      // Reset edit shift data
-      setEditShiftData({
-        id: '',
-        name: '',
-        startTime: null,
-        endTime: null,
-        role: '',
-        roleName: '',
-        formattedStartTime: '',
-        formattedEndTime: '',
-        status: '',
-        userId: null,
-        vehicleId: null,
-        vehicleName: null,
-        repeatDays: {
-          M: false,
-          Tu: false,
-          W: false,
-          Th: false,
-          F: false,
-          Sa: false,
-          Su: false,
-        }
-      });
-    } catch (error) {
-      console.error('Error deleting shift:', error);
-      alert('Failed to delete shift. Please try again.');
-    }
-  };
-
   // Function to handle user selection in edit dialog
   const handleEditUserSelect = (e) => {
     const userId = e.target.value || null;
@@ -1130,6 +561,160 @@ export default function ShiftScheduler() {
       endTime: newEndTime,
       formattedEndTime: timeStr
     }));
+  };
+
+  // Function to handle shift time changes (when moved or resized)
+  const handleTimeChange = async (event) => {
+    console.log('Shift updated:', event);
+    
+    if (!event || !event.id) return;
+    
+    // Set resize flag
+    isResizingRef.current = true;
+    
+    try {
+      // Find the shift that was changed - should use the Firebase document ID
+      const originalShift = shifts.find(shift => shift.id === event.id);
+      
+      if (!originalShift) {
+        console.log('Original shift not found for update:', event.id);
+        console.log('Available shifts:', shifts.map(s => s.id));
+        return;
+      }
+      
+      // Make sure we have the date
+      if (!originalShift.date) {
+        console.error('Missing date in shift data');
+        return;
+      }
+      
+      // Make sure we're using the correct date format for display
+      const startTime = new Date(event.start);
+      const endTime = new Date(event.end);
+      const timeDisplay = `${formatTimeInput(startTime)}-${formatTimeInput(endTime)}`;
+      const status = originalShift.status || (isShiftAvailable(originalShift.name) ? SHIFT_STATUS.AVAILABLE : SHIFT_STATUS.ASSIGNED);
+      
+      console.log(`Updating shift ${originalShift.id} with new time: ${timeDisplay}`);
+      
+      // Create an updated shift object
+      const updatedShift = {
+        ...originalShift,
+        start: event.start,
+        end: event.end,
+        role: event.group || originalShift.role, // Update role from group
+        group: event.group || originalShift.group, // Update group for vis-timeline
+        content: `${originalShift.name} | ${timeDisplay}`,
+        className: status === SHIFT_STATUS.AVAILABLE 
+          ? 'shift-item available-shift' + (isShiftRepeating(originalShift) ? ' repeating-shift' : '')
+          : 'shift-item' + (isShiftRepeating(originalShift) ? ' repeating-shift' : ''),
+        
+        // For Firestore
+        startTimeISO: event.start,
+        endTimeISO: event.end,
+        startTimeFormatted: formatTimeInput(startTime),
+        endTimeFormatted: formatTimeInput(endTime),
+        roleName: getRoleNameById(event.group || originalShift.group),
+        
+        // Don't update createdAt
+        createdAt: originalShift.createdAt,
+        
+        // updatedAt will be set by the Firebase service
+      };
+      
+      // Update Firebase
+      await updateShiftInFirebase(updatedShift);
+      
+      // If the shift has a vehicle assigned, update the vehicle's assigned shifts
+      if (updatedShift.vehicleId) {
+        console.log(`Updating vehicle assignment for shift ${updatedShift.id}`);
+        await updateShiftWithVehicle(
+          updatedShift.id, 
+          updatedShift.vehicleId, 
+          updatedShift.vehicleName,
+          updatedShift.date
+        );
+      }
+      
+      // Update local state
+      setShifts(prevShifts => {
+        return prevShifts.map(shift => {
+          if (shift.id === event.id) {
+            return updatedShift;
+          }
+          return shift;
+        });
+      });
+    } catch (error) {
+      console.error('Failed to update shift time:', error);
+      // Could reset the timeline item to its original position
+    } finally {
+      // Reset resize flag after a short delay to prevent accidental clicks
+      setTimeout(() => {
+        isResizingRef.current = false;
+      }, 500);
+    }
+  };
+
+  // Function to add a new shift from the dialog
+  const addShiftFromDialog = async () => {
+    try {
+      if (vehicleError) {
+        alert('Please fix vehicle errors before saving');
+        return;
+      }
+
+      // Create the shift object
+      const shift = {
+        ...newShiftData,
+        date: formatDate(currentDate, DATE_FORMATS.ISO),
+        startTimeISO: newShiftData.startTime.toISOString(),
+        endTimeISO: newShiftData.endTime.toISOString(),
+        startTimeFormatted: formatTimeInput(newShiftData.startTime),
+        endTimeFormatted: formatTimeInput(newShiftData.endTime),
+        roleName: getRoleNameById(newShiftData.role),
+        status: newShiftData.userId ? SHIFT_STATUS.ASSIGNED : SHIFT_STATUS.AVAILABLE,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      // Save to Firebase
+      const savedShift = await createFirebaseShift(shift);
+      console.log('Shift saved to Firebase:', savedShift);
+
+      // Update local state
+      setShifts(prev => [...prev, savedShift]);
+      
+      // Close the dialog
+      setCreateDialogOpen(false);
+      
+      // Reset the new shift data
+      setNewShiftData({
+        id: '',
+        name: SHIFT_STATUS.AVAILABLE,
+        startTime: null,
+        endTime: null,
+        role: '',
+        roleName: '',
+        formattedStartTime: '',
+        formattedEndTime: '',
+        status: SHIFT_STATUS.AVAILABLE,
+        userId: null,
+        vehicleId: null,
+        vehicleName: null,
+        repeatDays: {
+          M: false,
+          Tu: false,
+          W: false,
+          Th: false,
+          F: false,
+          Sa: false,
+          Su: false,
+        }
+      });
+    } catch (error) {
+      console.error('Error adding shift:', error);
+      alert('Failed to add shift. Please try again.');
+    }
   };
 
   // Function to update a shift from edit dialog data
@@ -1220,8 +805,8 @@ export default function ShiftScheduler() {
                 vehicleId: editShiftData.vehicleId || null,
                 vehicleName: editShiftData.vehicleName || null,
                 className: shiftDataForFirebase.status === SHIFT_STATUS.AVAILABLE 
-                  ? 'shift-item available-shift' + (shiftDataForFirebase.repeating ? ' repeating-shift' : '')
-                  : 'shift-item' + (shiftDataForFirebase.repeating ? ' repeating-shift' : '')
+                  ? 'shift-item available-shift' + (shiftDataForFirebase.repeatDays.some(day => day === true) ? ' repeating-shift' : '')
+                  : 'shift-item' + (shiftDataForFirebase.repeatDays.some(day => day === true) ? ' repeating-shift' : '')
               }
             : shift
         )
@@ -1236,101 +821,164 @@ export default function ShiftScheduler() {
     }
   };
 
-  // Handle shift updates (when moved or resized)
-  const handleTimeChange = async (event) => {
-    console.log('Shift updated:', event);
-    
-    if (!event || !event.id) return;
-    
-    // Set resize flag
-    isResizingRef.current = true;
-    
+  // Function to handle shift deletion
+  const deleteShift = async () => {
     try {
-      // Find the shift that was changed - should use the Firebase document ID
-      const originalShift = shifts.find(shift => shift.id === event.id);
-      
-      if (!originalShift) {
-        console.log('Original shift not found for update:', event.id);
-        console.log('Available shifts:', shifts.map(s => s.id));
+      if (!editShiftData.id) {
+        console.error('No shift ID available for deletion');
         return;
       }
-      
-      // Make sure we have the date
-      if (!originalShift.date) {
-        console.error('Missing date in shift data');
-        return;
-      }
-      
-      // Make sure we're using the correct date format for display
-      const startTime = new Date(event.start);
-      const endTime = new Date(event.end);
-      const timeDisplay = `${formatTimeInput(startTime)}-${formatTimeInput(endTime)}`;
-      const status = originalShift.status || (isShiftAvailable(originalShift.name) ? SHIFT_STATUS.AVAILABLE : SHIFT_STATUS.ASSIGNED);
-      
-      console.log(`Updating shift ${originalShift.id} with new time: ${timeDisplay}`);
-      
-      // Create an updated shift object
-      const updatedShift = {
-        ...originalShift,
-        start: event.start,
-        end: event.end,
-        role: event.group || originalShift.role, // Update role from group
-        group: event.group || originalShift.group, // Update group for vis-timeline
-        content: `${originalShift.name} | ${timeDisplay}`,
-        className: status === SHIFT_STATUS.AVAILABLE 
-          ? 'shift-item available-shift' + (originalShift.repeating ? ' repeating-shift' : '')
-          : 'shift-item' + (originalShift.repeating ? ' repeating-shift' : ''),
-        
-        // For Firestore
-        startTimeISO: event.start,
-        endTimeISO: event.end,
-        startTimeFormatted: formatTimeInput(startTime),
-        endTimeFormatted: formatTimeInput(endTime),
-        roleName: getRoleNameById(event.group || originalShift.group),
-        
-        // Don't update createdAt
-        createdAt: originalShift.createdAt,
-        
-        // updatedAt will be set by the Firebase service
-      };
-      
-      // Update Firebase - FIXED: Pass the entire shift object
-      await updateShiftInFirebase(updatedShift);
-      
-      // If the shift has a vehicle assigned, update the vehicle's assigned shifts
-      if (updatedShift.vehicleId) {
-        console.log(`Updating vehicle assignment for shift ${updatedShift.id}`);
-        await updateShiftWithVehicle(
-          updatedShift.id, 
-          updatedShift.vehicleId, 
-          updatedShift.vehicleName,
-          updatedShift.date
-        );
-      }
-      
+
+      // Delete from Firebase
+      await deleteFirebaseShift(editShiftData.date, editShiftData.id);
+
       // Update local state
-      setShifts(prevShifts => {
-        return prevShifts.map(shift => {
-          if (shift.id === event.id) {
-            return updatedShift;
-          }
-          return shift;
-        });
+      setShifts(prev => prev.filter(shift => shift.id !== editShiftData.id));
+
+      // Close the dialog
+      setEditDialogOpen(false);
+
+      // Reset edit shift data
+      setEditShiftData({
+        id: '',
+        name: '',
+        startTime: null,
+        endTime: null,
+        role: '',
+        roleName: '',
+        formattedStartTime: '',
+        formattedEndTime: '',
+        status: '',
+        userId: null,
+        vehicleId: null,
+        vehicleName: null,
+        repeatDays: {
+          M: false,
+          Tu: false,
+          W: false,
+          Th: false,
+          F: false,
+          Sa: false,
+          Su: false,
+        }
       });
     } catch (error) {
-      console.error('Failed to update shift time:', error);
-      // Could reset the timeline item to its original position
-    } finally {
-      // Reset resize flag after a short delay to prevent accidental clicks
-      setTimeout(() => {
-        isResizingRef.current = false;
-      }, 500);
+      console.error('Error deleting shift:', error);
+      alert('Failed to delete shift. Please try again.');
     }
   };
 
+  // Function to update shift in Firebase
+  const updateShiftInFirebase = useCallback(async (shift) => {
+    try {
+      // Extract the required data
+      const date = shift.date;
+      const id = shift.id;
+      
+      if (!date) {
+        throw new Error("Missing date in shift data");
+      }
+      
+      if (!id) {
+        throw new Error("Missing ID in shift data");
+      }
+      
+      console.log(`Updating shift with path: schedules/${date}/shifts/${id}`);
+      
+      // Remove properties that could cause issues with Firestore
+      const shiftDataForFirebase = { ...shift };
+      
+      // Pass the date and the ID
+      const updatedShift = await updateFirebaseShift(date, id, shiftDataForFirebase);
+      return updatedShift;
+    } catch (error) {
+      console.error("Failed to update shift:", error);
+      throw error;
+    }
+  }, []);
+
+  // Function to handle background clicks
+  const handleBackgroundClick = useCallback((clickEvent) => {
+    console.log('=== handleBackgroundClick ===');
+    console.log('Click event:', clickEvent);
+    
+    if (clickEvent.what === 'background' && clickEvent.group && clickEvent.time) {
+      console.log('✅ Valid background click detected');
+      
+      // Check if roles are loaded
+      if (roles.length === 0 || roles[0].id === 'default') {
+        console.log('❌ Roles not loaded yet, cannot create shift');
+        alert('Please wait for roles to load before creating a shift');
+        return;
+      }
+      
+      // Get the clicked time and group
+      const clickedTime = new Date(clickEvent.time);
+      const role = clickEvent.group;
+      
+      console.log('Processing click:', {
+        clickedTime,
+        role,
+        rolesLoaded: roles.length > 0
+      });
+      
+      // Round time to the nearest half hour for better UX
+      const minutes = clickedTime.getMinutes();
+      clickedTime.setMinutes(minutes < 30 ? 0 : 30);
+      clickedTime.setSeconds(0);
+      clickedTime.setMilliseconds(0);
+      
+      // Calculate end time (start time + 3 hours)
+      const endTime = new Date(clickedTime.getTime() + 3 * 60 * 60 * 1000);
+      
+      // Get role name for display
+      const roleName = getRoleNameById(role);
+      
+      console.log('Setting new shift data:', {
+        startTime: clickedTime,
+        endTime,
+        role,
+        roleName
+      });
+      
+      // Set new shift data for the dialog
+      setNewShiftData({
+        id: `shift${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        name: SHIFT_STATUS.AVAILABLE,
+        startTime: clickedTime,
+        endTime: endTime,
+        role: role,
+        roleName: roleName,
+        formattedStartTime: formatTimeInput(clickedTime),
+        formattedEndTime: formatTimeInput(endTime),
+        status: SHIFT_STATUS.AVAILABLE,
+        userId: null,
+        vehicleId: null,
+        vehicleName: null,
+        repeatDays: {
+          M: false,
+          Tu: false,
+          W: false,
+          Th: false,
+          F: false,
+          Sa: false,
+          Su: false,
+        }
+      });
+      
+      console.log('Opening create dialog');
+      setCreateDialogOpen(true);
+    } else {
+      console.log('❌ Invalid background click:', {
+        what: clickEvent.what,
+        hasGroup: !!clickEvent.group,
+        hasTime: !!clickEvent.time
+      });
+    }
+  }, [roles, getRoleNameById, formatTimeInput]);
+
   return (
     <div className="container mx-auto p-4">
-
       <div className="flex items-center gap-2 mb-2">
         <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setCurrentDate(prev => new Date(prev.getTime() - 86400000))}>
           <ChevronLeft className="h-6 w-6" />
@@ -1478,6 +1126,7 @@ export default function ShiftScheduler() {
                     key={day}
                     variant={newShiftData.repeatDays[day] ? "default" : "outline"}
                     size="sm"
+                    className="w-10 h-8 flex items-center justify-center"
                     onClick={() => toggleRepeatDay(day)}
                   >
                     {day}
@@ -1671,7 +1320,26 @@ export default function ShiftScheduler() {
         .vis-grid.vis-major {
           border-color: #e0e0e0;
         }
+        /* Add fixed size for day buttons */
+        .day-button {
+          width: 40px;
+          height: 32px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid;
+          border-radius: 4px;
+          margin: 2px;
+          transition: background-color 0.2s;
+        }
+        .day-button[data-state="default"] {
+          background-color: white;
+          border-color: #e2e8f0;
+        }
+        .day-button[data-state="outline"] {
+          background-color: white;
+          border-color: #e2e8f0;
       `}</style>
     </div>
   );
-}
+} 
