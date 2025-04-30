@@ -321,7 +321,7 @@ export default function ShiftScheduler() {
     loadVehicles();
   }, []);
   
-  // Check vehicle availability when shift times change
+  /* Check vehicle availability when shift times change
   useEffect(() => {
     const checkAvailability = async () => {
       const vehicleId = newShiftData.vehicleId || editShiftData.vehicleId;
@@ -365,7 +365,7 @@ export default function ShiftScheduler() {
     editShiftData.startTime,
     editShiftData.endTime,
     editShiftData.id
-  ]);
+  ]);*/
   
   
   // ========== Shift Management Functions ==========
@@ -1557,7 +1557,7 @@ export default function ShiftScheduler() {
                     <option value="">Select Vehicle</option>
                     {vehicles
                       .filter(vehicle => 
-                        vehicle.status === 'Available' || vehicle.id === editShiftData.vehicleId)
+                        vehicle.status === 'Available' || vehicle.status === 'In Use')
                       .map(vehicle => (
                         <option key={vehicle.id} value={vehicle.id}>
                           {vehicle.name}

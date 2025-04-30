@@ -17,9 +17,9 @@ import {
 } from 'firebase/firestore';
 import { db } from './config';
 import { 
-  addShiftToVehicle, 
-  removeShiftFromVehicle, 
-  getVehicleAvailability,
+  //addShiftToVehicle, 
+  //removeShiftFromVehicle, 
+  //getVehicleAvailability,
   Vehicle
 } from './vehicleService';
 import { getAuth } from 'firebase/auth';
@@ -202,12 +202,6 @@ export const deleteShift = async (date: string, id: string): Promise<string> => 
     if (shiftDoc.exists()) {
       const shiftData = shiftDoc.data() as Shift;
       const vehicleId = shiftData.vehicleId;
-      
-      // If the shift has a vehicle assigned, remove it from the vehicle
-      if (vehicleId) {
-        console.log(`Removing shift ${id} from vehicle ${vehicleId} before deletion`);
-        await removeShiftFromVehicle(vehicleId, id, date);
-      }
     }
     
     // Now delete the shift
@@ -348,29 +342,6 @@ export const fetchVehicles = async (): Promise<Vehicle[]> => {
   }
 };
 
-// Check if a vehicle is available for a specific time window
-// Check if a vehicle is available for a specific time window
-export const checkVehicleAvailability = async (
-  vehicleId: string, 
-  startTimeISO: string, 
-  endTimeISO: string,
-  shiftId?: string // pass the shiftId as an argument (optional)
-): Promise<{ available: boolean; conflictingShifts: string[] }> => {
-  try {
-    // Extract dates from ISO strings
-    const startDate = startTimeISO.split('T')[0]; // format as YYYY-MM-DD
-    const endDate = endTimeISO.split('T')[0]; // format as YYYY-MM-DD
-
-    // Pass the shiftId to getVehicleAvailability to avoid conflicts with the shift being edited
-    const result = await getVehicleAvailability(vehicleId, startDate, endDate, shiftId);
-
-    return result; // Return the result
-  } catch (error) {
-    console.error(`Error checking availability for vehicle ${vehicleId}:`, error);
-    throw error;
-  }
-};
-
 // Assign a vehicle to a shift
 export const assignVehicleToShift = async (
   shiftId: string, 
@@ -387,8 +358,6 @@ export const assignVehicleToShift = async (
       updatedAt: serverTimestamp()
     });
     
-    // Add the shift to the vehicle's assigned shifts
-    await addShiftToVehicle(vehicleId, shiftId, date);
   } catch (error) {
     console.error(`Error assigning vehicle ${vehicleId} to shift ${shiftId}:`, error);
     throw error;
@@ -449,10 +418,6 @@ export const removeVehicleFromShift = async (shiftId: string, date: string): Pro
       updatedAt: serverTimestamp()
     });
     
-    // Remove the shift from the vehicle's assigned shifts
-    console.log(`[removeVehicleFromShift] Removing shift from vehicle's assigned shifts`);
-    await removeShiftFromVehicle(vehicleId, shiftId, date);
-    
     console.log(`[removeVehicleFromShift] Successfully removed vehicle from shift`);
   } catch (error) {
     console.error(`[removeVehicleFromShift] Error removing vehicle from shift ${shiftId}:`, error);
@@ -505,61 +470,10 @@ export const updateShiftWithVehicle = async (
     console.log(`[updateShiftWithVehicle] Updating shift with data:`, updateData);
     await updateDoc(shiftRef, updateData);
     console.log(`[updateShiftWithVehicle] Successfully updated shift document`);
-    
-    // Handle vehicle assignment changes
-    const currentVehicleId = shiftData.vehicleId;
-    
-    if (currentVehicleId !== vehicleId) {
-      console.log(`[updateShiftWithVehicle] Vehicle ID changed from ${currentVehicleId} to ${vehicleId}, updating vehicle assignments`);
-      
-      // Remove from old vehicle if it exists
-      if (currentVehicleId) {
-        console.log(`[updateShiftWithVehicle] Removing shift from old vehicle ${currentVehicleId}`);
-        await removeShiftFromVehicle(currentVehicleId, shiftId, date);
-        console.log(`[updateShiftWithVehicle] Successfully removed from old vehicle`);
-      }
-      
-      // Add to new vehicle if provided
-      if (vehicleId) {
-        console.log(`[updateShiftWithVehicle] Adding shift to new vehicle ${vehicleId}`);
-        await addShiftToVehicle(vehicleId, shiftId, date);
-        console.log(`[updateShiftWithVehicle] Successfully added to new vehicle`);
-      }
-    } else {
-      console.log(`[updateShiftWithVehicle] Vehicle ID unchanged (${vehicleId}), no vehicle assignment updates needed`);
-    }
-    
+
     console.log(`[updateShiftWithVehicle] Update completed successfully`);
   } catch (error) {
     console.error(`[updateShiftWithVehicle] Error updating shift ${shiftId}:`, error);
-    throw error;
-  }
-};
-
-// Get future shifts for a vehicle (for when a vehicle goes out of service)
-export const getFutureShiftsForVehicle = async (vehicleId: string): Promise<{ date: string; shiftIds: string[] }[]> => {
-  try {
-    const vehicleRef = doc(db, 'vehicles', vehicleId);
-    const vehicleDoc = await getDoc(vehicleRef);
-    
-    if (!vehicleDoc.exists()) {
-      throw new Error(`Vehicle ${vehicleId} does not exist`);
-    }
-    
-    const vehicleData = vehicleDoc.data() as Vehicle;
-    const assignedShifts = vehicleData.assignedShifts || {};
-    
-    // Get today's date in ISO format (YYYY-MM-DD)
-    const today = new Date().toISOString().split('T')[0];
-    
-    // Filter for future dates only
-    const futureShifts = Object.entries(assignedShifts)
-      .filter(([date]) => date >= today)
-      .map(([date, shiftIds]) => ({ date, shiftIds }));
-    
-    return futureShifts;
-  } catch (error) {
-    console.error(`Error getting future shifts for vehicle ${vehicleId}:`, error);
     throw error;
   }
 };

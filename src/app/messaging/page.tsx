@@ -195,9 +195,51 @@ export default function ChatPage() {
           </div>
         </header>
 
+        {/* Centered construction message */}
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-red-600 text-2xl font-semibold">
+            This page is under construction.
+          </p>
+        </div>
+        
+        </div>
+
+      </AppSidebar>
+  );
+}
+
+/*
+
+  return (
+    <AppSidebar>
+      <div className="flex h-screen flex-col" ref={containerRef}>*/
+        {/* Top Navigation Bar */}
+        /*
+        <header className="flex items-center justify-between border-b px-4 py-2">
+          <div className="flex items-center gap-3">
+            <span className="text-xl font-bold">Employee Messenger</span>
+            <span className="text-sm text-muted-foreground">
+              Message your employees!
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <button className="p-2 hover:text-foreground">
+              <Search className="h-5 w-5" />
+            </button>
+            <button className="p-2 hover:text-foreground">
+              <Settings className="h-5 w-5" />
+            </button>
+            <button className="p-2 hover:text-foreground">
+              <Menu className="h-5 w-5" />
+            </button>
+          </div>
+        </header>*/
+
         {/* Main content area with resizable sidebar */}
-        <div className="flex flex-1 overflow-hidden">
+        /*
+        <div className="flex flex-1 overflow-hidden">*/
           {/* Conversation Sidebar */}
+          /*
           <aside className="border-r overflow-y-auto" style={{ width: sidebarWidth }}>
             <div className="p-4">
               <h2 className="text-xl font-bold mb-4">Conversations</h2>
@@ -232,17 +274,20 @@ export default function ChatPage() {
                 })}
               </ul>
             </div>
-          </aside>
+          </aside>*/
 
           {/* Draggable Divider */}
+          /*
           <div
             className="w-1 cursor-col-resize bg-gray-300"
             onMouseDown={handleMouseDown}
-          />
+          />*/
 
           {/* Chat Area */}
-          <main className="flex-1 flex flex-col">
+          /*
+          <main className="flex-1 flex flex-col">*/
             {/* Chat Header */}
+            /*
             <div className="flex items-center border-b p-4">
               <Avatar className="mr-3 h-10 w-10">
                 <AvatarImage src={selectedConversation?.avatar} alt={selectedConversation?.name} />
@@ -254,9 +299,10 @@ export default function ChatPage() {
                 <div className="font-medium">{selectedConversation?.name}</div>
                 <div className="text-sm text-muted-foreground">Active now</div>
               </div>
-            </div>
+            </div>*/
 
             {/* Chat Messages */}
+            /*
             <ScrollArea className="flex-1 p-4">
               <ChatMessageList smooth className="h-full">
                 {selectedConversation?.messages.map((msg) => (
@@ -273,9 +319,10 @@ export default function ChatPage() {
                   </ChatBubble>
                 ))}
               </ChatMessageList>
-            </ScrollArea>
+            </ScrollArea>*/
 
             {/* Message Input */}
+            /*
             <div className="border-t p-4">
               <div className="flex items-center gap-2">
                 <ChatInput
@@ -298,3 +345,5 @@ export default function ChatPage() {
     </AppSidebar>
   );
 }
+
+*/
