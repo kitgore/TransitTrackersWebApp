@@ -1557,7 +1557,7 @@ export default function ShiftScheduler() {
                     <option value="">Select Vehicle</option>
                     {vehicles
                       .filter(vehicle => 
-                        vehicle.status === 'Available' || vehicle.id === editShiftData.vehicleId)
+                        vehicle.status === 'Available' || vehicle.status === 'In Use')
                       .map(vehicle => (
                         <option key={vehicle.id} value={vehicle.id}>
                           {vehicle.name}
