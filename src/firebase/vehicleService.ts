@@ -10,9 +10,7 @@ export interface Vehicle {
   licensePlate: string;
   status: string;
   note?: string;
-  assignedShifts?: {
-    [date: string]: string[]; // date -> array of shift IDs
-  };
+  adaAccessible?: boolean;
 }
 
 // Fetch all vehicles
@@ -120,7 +118,7 @@ export const updateVehicleStatus = async (vehicleId: string, status: string, not
   }
 };
 
-// Add shift to vehicle's assigned shifts
+/* Add shift to vehicle's assigned shifts
 export const addShiftToVehicle = async (vehicleId: string, shiftId: string, date: string): Promise<void> => {
   try {
     console.log(`[addShiftToVehicle] Adding shift ${shiftId} to vehicle ${vehicleId} for date ${date}`);
@@ -163,9 +161,9 @@ export const addShiftToVehicle = async (vehicleId: string, shiftId: string, date
     console.error(`[addShiftToVehicle] Error adding shift ${shiftId} to vehicle ${vehicleId}:`, error);
     throw error;
   }
-};
+};*/
 
-// Remove shift from vehicle's assigned shifts
+/* Remove shift from vehicle's assigned shifts
 export const removeShiftFromVehicle = async (vehicleId: string, shiftId: string, date: string): Promise<void> => {
   try {
     console.log(`[removeShiftFromVehicle] Removing shift ${shiftId} from vehicle ${vehicleId} for date ${date}`);
@@ -216,9 +214,9 @@ export const removeShiftFromVehicle = async (vehicleId: string, shiftId: string,
     console.error(`[removeShiftFromVehicle] Error removing shift ${shiftId} from vehicle ${vehicleId}:`, error);
     throw error;
   }
-};
+};*/
 
-// Get vehicle availability for a date range
+/* Get vehicle availability for a date range
 export const getVehicleAvailability = async (
   vehicleId: string, 
   startDate: string, 
@@ -264,10 +262,10 @@ export const getVehicleAvailability = async (
     console.error(`Error checking availability for vehicle ${vehicleId}:`, error);
     throw error;
   }
-};
+};*/
 
 
-// Get future shifts assigned to a vehicle (for when a vehicle goes out of service)
+/* Get future shifts assigned to a vehicle (for when a vehicle goes out of service)
 export const getFutureShiftsForVehicle = async (vehicleId: string): Promise<{ date: string; shiftIds: string[] }[]> => {
   try {
     const vehicleRef = doc(db, 'vehicles', vehicleId);
@@ -293,4 +291,4 @@ export const getFutureShiftsForVehicle = async (vehicleId: string): Promise<{ da
     console.error(`Error getting future shifts for vehicle ${vehicleId}:`, error);
     throw error;
   }
-}; 
+}; */
