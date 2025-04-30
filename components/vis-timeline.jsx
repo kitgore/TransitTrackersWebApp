@@ -56,8 +56,8 @@ const GanttTimeline = ({
       showCurrentTime: true,
       format: {
         minorLabels: {
-          minute: 'h:mma',
-          hour: 'ha'
+          minute: 'hA',
+          hour: 'hA'
         },
         majorLabels: {
           hour: 'ddd D MMM',

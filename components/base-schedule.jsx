@@ -58,8 +58,8 @@ export function useBaseSchedule() {
     verticalScroll: false,
     format: {
       minorLabels: {
-        hour: 'h a',
-        minute: 'h:mm a'
+        hour: 'hA',
+        minute: 'hA'
       }
     },
     groupHeightMode: 'fixed',

@@ -37,6 +37,7 @@ const adminOnlyNavigationItems = [
   { name: 'Manage Drivers', url: '/users', icon: BookUser },
   { name: 'Manage Vehicles', url: '/admin', icon: Bus },
   { name: 'Manage Roles', url: '/roles', icon: ClipboardList },
+  { name: 'Schedule Builder', url: '/schedule-builder', icon: Calendar },
 ];
 
 const userOnlyNavigationItems = [
