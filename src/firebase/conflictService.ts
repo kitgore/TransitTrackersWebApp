@@ -4,58 +4,48 @@ import { Timestamp, getDocs, query, where } from 'firebase/firestore';
 interface CheckShiftConflictInput {
   driverId?: string;
   vehicleId?: string;
-  startTime: string; // Changed to string in "HH:mm" format
-  endTime: string;   // Changed to string in "HH:mm" format
-  id?: string;       // Optional — used to skip the current shift on edit
-  date?: string;     // Needed to know which subcollection to search
+  startTime: string; // "HH:mm"
+  endTime: string;   // "HH:mm"
+  id?: string;
+  date: string;
 }
 
+function combineDateAndTime(dateStr: string, timeStr: string): Date {
+  const [hour, minute] = timeStr.split(":").map(Number);
+  const date = new Date(dateStr + "T00:00:00");
+  date.setHours(hour, minute, 0, 0);
+  return date;
+}
+
+
 export async function checkShiftConflict(input: CheckShiftConflictInput): Promise<boolean> {
-  console.log("CONFLICT CHECKER CALLED");
   const { driverId, vehicleId, startTime, endTime, id, date } = input;
 
-  if (!date) throw new Error('Missing shift date for conflict check');
-
-  console.log(date);
+  const newStart = combineDateAndTime(date, startTime);
+  const newEnd = combineDateAndTime(date, endTime);
 
   const shiftsCollection = getShiftsCollection(date);
-
-  // Convert startTime and endTime strings to Date objects
-  const [startHour, startMinute] = startTime.split(':').map(Number);
-  const [endHour, endMinute] = endTime.split(':').map(Number);
-  const startDate = new Date();
-  startDate.setHours(startHour, startMinute, 0, 0); // Set time based on the startTime
-  const endDate = new Date();
-  endDate.setHours(endHour, endMinute, 0, 0); // Set time based on the endTime
-
-  // Fetch all shifts where startTime is before the end of the new shift
-  const q = query(shiftsCollection, where('startTime', '<', endDate));
-  const snapshot = await getDocs(q);
+  const snapshot = await getDocs(shiftsCollection);
 
   for (const doc of snapshot.docs) {
     const shift = doc.data();
 
-    // Skip current shift when editing
-    if (doc.id === id) continue;
+    if (doc.id === id) continue; // Skip the current shift being edited
 
-    // Skip if it doesn't have start/end time
-    if (!shift.startTime || !shift.endTime) continue;
+    if (!shift.startTimeFormatted || !shift.endTimeFormatted) continue;
 
-    const shiftStart = shift.startTime.toDate();
-    const shiftEnd = shift.endTime.toDate();
+    const shiftStart = combineDateAndTime(date, shift.startTimeFormatted);
+    const shiftEnd = combineDateAndTime(date, shift.endTimeFormatted);
 
-    // Check if this shift overlaps
-    const overlaps = shiftEnd > startDate && shiftStart < endDate;
+    const overlaps = shiftEnd > newStart && shiftStart < newEnd;
 
-    // Check for same driver or vehicle
     const sameDriver = driverId && shift.userId === driverId;
     const sameVehicle = vehicleId && shift.vehicleId === vehicleId;
 
     if (overlaps && (sameDriver || sameVehicle)) {
-      return true; // Conflict
+      return true;
     }
   }
 
-  return false; // No conflict
+  return false;
 }
-
