@@ -22,7 +22,9 @@ import {
   //getVehicleAvailability,
   Vehicle
 } from './vehicleService';
-import { getAuth } from 'firebase/auth';
+
+import { checkShiftConflict } from './conflictService';
+
 // Type definitions
 interface Shift {
   id?: string;
