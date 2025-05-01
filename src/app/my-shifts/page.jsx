@@ -8,6 +8,7 @@ import { fetchShiftsByUser, fetchRoles } from '@/src/firebase/shiftService';
 import Link from 'next/link';
 import { NavUser } from '@/components/nav-user';
 import { BookUser, Calendar, MessageSquare } from 'lucide-react';
+import { AppSidebar } from "@/components/app-sidebar";
 
 export default function MyShiftsPage() {
   const { user } = useAuth();
@@ -66,26 +67,8 @@ export default function MyShiftsPage() {
   };
 
   return (
+    <AppSidebar>
     <div className="flex flex-col min-h-screen">
-      <header className="w-full border-b bg-white shadow-sm">
-        <div className="flex flex-wrap justify-between items-center px-4 py-3 max-w-screen-xl mx-auto">
-          <div className="flex flex-wrap items-center gap-4">
-            <Link href="/dashboard" className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-black">
-              <Calendar size={18} /> Schedule
-            </Link>
-            <Link href="/notifications" className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-black">
-              <MessageSquare size={18} /> Notifications
-            </Link>
-            <Link href="/my-shifts" className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-black">
-              <Calendar size={18} /> View My Shifts
-            </Link>
-            <Link href="/account" className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-black">
-              <BookUser size={18} /> User Settings
-            </Link>
-          </div>
-          <NavUser user={userData} />
-        </div>
-      </header>
 
       <main className="flex-1 container mx-auto p-4 max-w-3xl w-full">
         <div className="mb-6">
@@ -128,5 +111,6 @@ export default function MyShiftsPage() {
         )}
       </main>
     </div>
+    </AppSidebar>
   );
 }
