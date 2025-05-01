@@ -51,7 +51,11 @@ export const setVehicleStatusToInUseForCurrentShift = async (): Promise<void> =>
 
   try {
     const currentDateTime = new Date();
-    const currentDate = currentDateTime.toISOString().split('T')[0];
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const currentDate = `${currentDateTime.getFullYear()}-${pad(currentDateTime.getMonth() + 1)}-${pad(currentDateTime.getDate())}`;
+    console.log("Local currentDateTime:", currentDateTime.toString());
+
+
     const shiftsSnapshot = await getDocs(getShiftsCollection(currentDate));
 
     const activeVehicleToDriverNameMap = new Map<string, string>();
@@ -61,8 +65,18 @@ export const setVehicleStatusToInUseForCurrentShift = async (): Promise<void> =>
       const data = docSnap.data();
       if (!data.vehicleId || data.vehicleId === "Select") return;
 
-      const start = data.start instanceof Timestamp ? data.start.toDate() : new Date(data.start);
-      const end = data.end instanceof Timestamp ? data.end.toDate() : new Date(data.end);
+      const start = data.start instanceof Timestamp
+      ? data.start.toDate()
+      : data.startTime instanceof Timestamp
+      ? data.startTime.toDate()
+      : new Date(data.start || data.startTime);
+
+    const end = data.end instanceof Timestamp
+      ? data.end.toDate()
+      : data.endTime instanceof Timestamp
+      ? data.endTime.toDate()
+      : new Date(data.end || data.endTime);
+
 
       if (currentDateTime >= start && currentDateTime <= end) {
         const driverName = data.name || "Unknown Driver";
