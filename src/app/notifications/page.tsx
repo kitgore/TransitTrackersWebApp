@@ -1,5 +1,8 @@
 'use client';
 
+// THIS PAGE IS NOT IN USE - THERE IS NO WAY TO ACCESS IT
+// LEAVING IT IN THE CODEBASE JUST IN CASE
+
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import {

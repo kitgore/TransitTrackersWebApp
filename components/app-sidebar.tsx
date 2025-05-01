@@ -42,7 +42,6 @@ const adminOnlyNavigationItems = [
 
 const userOnlyNavigationItems = [
   { name: 'Schedule', url: '/dashboard', icon: Calendar },
-  { name: 'Notifications', url: '/notifications', icon: MessageSquare },
   { name: 'View My Shifts', url: '/my-shifts', icon: ClipboardList },
 ];
 
