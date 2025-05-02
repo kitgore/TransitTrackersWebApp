@@ -18,6 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from '@/components/ui/button';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 
 export default function AdminSchedule() {
   // State for data
@@ -26,6 +27,7 @@ export default function AdminSchedule() {
   const [roles, setRoles] = useState([{ id: 'default', content: 'Loading Roles...' }]);
   const [users, setUsers] = useState([]);
   const [vehicles, setVehicles] = useState([]);
+  const { toast } = useToast();
 
   // Format date for Firebase queries
   const formatDate = (date, format) => {
@@ -132,46 +134,76 @@ export default function AdminSchedule() {
 
   // Callbacks for shift operations
   const handleShiftCreate = async (shift) => {
-    try {
-      const savedShift = await createFirebaseShift(shift);
-      const formattedShift = formatShiftForTimeline(savedShift);
-      setShifts(prev => [...prev, formattedShift]);
-      return formattedShift;
-    } catch (error) {
-      console.error('Error creating shift:', error);
-      throw error;
+    const result = await createFirebaseShift(shift);
+  
+    if (!result.success) {
+      toast({
+        title: "Shift Conflict",
+        description: result.message,
+        variant: "destructive"
+      });
+      return null;
     }
+  
+    const formattedShift = formatShiftForTimeline(result.shift);
+    setShifts(prev => [...prev, formattedShift]);
+    return formattedShift;
   };
 
-  const handleShiftUpdate = async (shift) => {
-    try {
-      const originalShift = shifts.find(s => s.id === shift.id);
-      
-      // Update local state immediately
-      const formattedShift = formatShiftForTimeline(shift);
-      setShifts(prev => prev.map(s => s.id === shift.id ? formattedShift : s));
-      
-      // Handle vehicle assignment changes
-      if (originalShift?.vehicleId !== shift.vehicleId) {
-        await updateShiftWithVehicle(
-          shift.id,
-          shift.vehicleId || null,
-          shift.vehicleName || null,
-          shift.date
-        );
-      }
-      
-      // Update the shift in Firebase
-      await updateFirebaseShift(shift.date, shift.id, shift);
-      
-      return formattedShift;
-    } catch (error) {
-      console.error('Error updating shift:', error);
-      // Revert local state if the update fails
-      setShifts(prev => prev.map(s => s.id === shift.id ? originalShift : s));
-      throw error;
+const handleShiftUpdate = async (shift) => {
+  const originalShift = shifts.find(s => s.id === shift.id);
+
+  try {
+    const formattedShift = formatShiftForTimeline(shift);
+
+    // Optimistically update UI
+    setShifts(prev => prev.map(s => s.id === shift.id ? formattedShift : s));
+
+    // Update vehicle info if changed
+    if (originalShift?.vehicleId !== shift.vehicleId) {
+      await updateShiftWithVehicle(
+        shift.id,
+        shift.vehicleId || null,
+        shift.vehicleName || null,
+        shift.date
+      );
     }
-  };
+
+    // Call your conflict-aware update function
+    const result = await updateFirebaseShift(shift.date, shift.id, shift);
+
+    if (!result.success) {
+      // Revert local state
+      setShifts(prev => prev.map(s => s.id === shift.id ? originalShift : s));
+
+      // Show error toast
+      toast({
+        title: "Shift Conflict",
+        description: result.message,
+        variant: "destructive"
+      });
+
+      return null;
+    }
+
+    return formattedShift;
+
+  } catch (error) {
+    console.error('Error updating shift:', error);
+
+    // Revert local state on unexpected error
+    setShifts(prev => prev.map(s => s.id === shift.id ? originalShift : s));
+
+    toast({
+      title: "Error",
+      description: "An unexpected error occurred while updating the shift.",
+      variant: "destructive"
+    });
+
+    return null;
+  }
+};
+
 
   const handleShiftDelete = async (shift) => {
     try {

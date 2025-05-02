@@ -17,8 +17,7 @@ function combineDateAndTime(dateStr: string, timeStr: string): Date {
   return date;
 }
 
-
-export async function checkShiftConflict(input: CheckShiftConflictInput): Promise<boolean> {
+export async function checkShiftConflict(input: CheckShiftConflictInput): Promise<any[] | null> {
   const { driverId, vehicleId, startTime, endTime, id, date } = input;
 
   const newStart = combineDateAndTime(date, startTime);
@@ -27,25 +26,25 @@ export async function checkShiftConflict(input: CheckShiftConflictInput): Promis
   const shiftsCollection = getShiftsCollection(date);
   const snapshot = await getDocs(shiftsCollection);
 
+  const conflictingShifts: any[] = [];
+
   for (const doc of snapshot.docs) {
     const shift = doc.data();
 
     if (doc.id === id) continue; // Skip the current shift being edited
-
     if (!shift.startTimeFormatted || !shift.endTimeFormatted) continue;
 
     const shiftStart = combineDateAndTime(date, shift.startTimeFormatted);
     const shiftEnd = combineDateAndTime(date, shift.endTimeFormatted);
 
     const overlaps = shiftEnd > newStart && shiftStart < newEnd;
-
     const sameDriver = driverId && shift.userId === driverId;
     const sameVehicle = vehicleId && shift.vehicleId === vehicleId;
 
     if (overlaps && (sameDriver || sameVehicle)) {
-      return true;
+      conflictingShifts.push({ id: doc.id, ...shift });
     }
   }
 
-  return false;
+  return conflictingShifts.length > 0 ? conflictingShifts : null;
 }
