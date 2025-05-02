@@ -1108,21 +1108,25 @@ export default function ScheduleBuilder() {
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0">
-                <div className="p-4">
-                  <h4 className="font-medium mb-2">Start Date</h4>
-                  <Calendar
-                    mode="single"
-                    selected={draftStartDate}
-                    onSelect={setDraftStartDate}
-                    initialFocus
-                  />
-                  <h4 className="font-medium mb-2 mt-4">End Date</h4>
-                  <Calendar
-                    mode="single"
-                    selected={draftEndDate}
-                    onSelect={setDraftEndDate}
-                    initialFocus
-                  />
+                <div className="p-4 flex gap-8">
+                  <div>
+                    <h4 className="font-medium mb-2">Start Date</h4>
+                    <Calendar
+                      mode="single"
+                      selected={draftStartDate}
+                      onSelect={setDraftStartDate}
+                      initialFocus
+                    />
+                  </div>
+                  <div>
+                    <h4 className="font-medium mb-2">End Date</h4>
+                    <Calendar
+                      mode="single"
+                      selected={draftEndDate}
+                      onSelect={setDraftEndDate}
+                      initialFocus
+                    />
+                  </div>
                 </div>
               </PopoverContent>
             </Popover>
