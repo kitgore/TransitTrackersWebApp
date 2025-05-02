@@ -149,7 +149,7 @@ export function AppSidebar({ children }: SidebarProps) {
         </div>
       </header>
 
-      <main className="flex-1 p-4 max-w-screen-xl mx-auto w-full">
+      <main className="flex-1 px-4 max-w-screen-xl mx-auto w-full">
         {children}
       </main>
     </div>

@@ -23,11 +23,11 @@ import {
   fetchUsers,
   fetchRoles,
   fetchVehicles,
-  checkVehicleAvailability,
   assignVehicleToShift,
   removeVehicleFromShift,
   updateShiftWithVehicle
 } from '@/src/firebase/shiftService';
+import { checkShiftConflict } from '@/src/firebase/conflictService';
 import { useBaseSchedule, SHIFT_STATUS, DATE_FORMATS } from './base-schedule';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from "@/hooks/use-toast";
@@ -261,54 +261,83 @@ export default function ShiftScheduler() {
     loadVehicles();
   }, []);
   
-  // Check vehicle availability when shift times change
-  useEffect(() => {
-    const checkAvailability = async () => {
-      const vehicleId = editShiftData.vehicleId;
-      const startTime = editShiftData.startTime;
-      const endTime = editShiftData.endTime;
-      const currentShiftId = editShiftData.id;
-  
-      if (vehicleId && startTime && endTime) {
-        try {
-          console.log(`Checking availability for vehicle ${vehicleId} from ${startTime.toISOString()} to ${endTime.toISOString()}`);
-          const result = await checkVehicleAvailability(
-            vehicleId,
-            startTime.toISOString(),
-            endTime.toISOString(),
-            currentShiftId
-          );
-  
-          setVehicleAvailability(prev => ({
-            ...prev,
-            [vehicleId]: result
-          }));
-  
-          if (!result.available) {
-            setVehicleError(`Vehicle is not available during this time. It has ${result.conflictingShifts.length} conflicting shift(s).`);
-          } else {
-            setVehicleError('');
-          }
-        } catch (error) {
-          console.error('Error checking vehicle availability:', error);
-          setVehicleError('Error checking vehicle availability. Please try again.');
-        }
+  // Remove the vehicle availability check effect and create a function instead
+  const checkVehicleAvailability = useCallback(async (vehicleId, startTime, endTime, shiftId, date) => {
+    if (!vehicleId || !startTime || !endTime || !date) return;
+
+    try {
+      console.log(`Checking availability for vehicle ${vehicleId} from ${startTime.toISOString()} to ${endTime.toISOString()}`);
+      const conflicts = await checkShiftConflict({
+        vehicleId,
+        startTime: formatTimeInput(startTime),
+        endTime: formatTimeInput(endTime),
+        date,
+        id: shiftId
+      });
+
+      setVehicleAvailability(prev => ({
+        ...prev,
+        [vehicleId]: { available: !conflicts, conflictingShifts: conflicts || [] }
+      }));
+
+      if (conflicts) {
+        setVehicleError(`Vehicle is not available during this time. It has ${conflicts.length} conflicting shift(s).`);
+      } else {
+        setVehicleError('');
       }
-    };
-  
-    checkAvailability();
-  }, [editShiftData.vehicleId, editShiftData.startTime, editShiftData.endTime, editShiftData.id]);
+    } catch (error) {
+      console.error('Error checking vehicle availability:', error);
+      setVehicleError('Error checking vehicle availability. Please try again.');
+    }
+  }, [formatTimeInput]);
+
+  // Modify the vehicle selection handler in the edit dialog
+  const handleVehicleSelect = useCallback((e) => {
+    const vehicleId = e.target.value;
+    const vehicle = vehicles.find(v => v.id === vehicleId);
+    
+    setEditShiftData(prev => ({
+      ...prev,
+      vehicleId: vehicleId,
+      vehicleName: vehicle ? vehicle.name : ''
+    }));
+    
+    // Check availability when vehicle changes
+    if (vehicleId && editShiftData.startTime && editShiftData.endTime) {
+      checkVehicleAvailability(
+        vehicleId,
+        editShiftData.startTime,
+        editShiftData.endTime,
+        editShiftData.id,
+        editShiftData.date
+      );
+    }
+    setVehicleError(''); // Clear error when vehicle is selected
+  }, [vehicles, editShiftData, checkVehicleAvailability]);
 
   // Force timeline redraw after shifts are loaded
   useEffect(() => {
+    console.log('=== Shifts Loaded Effect ===');
+    console.log('Shifts length:', shifts.length);
+    
     if (shifts.length > 0 && timelineRef.current) {
-      console.log('Forcing timeline redraw after shifts loaded');
-      // Small delay to ensure DOM is ready
-      setTimeout(() => {
-        if (timelineRef.current) {
-          timelineRef.current.redraw();
-        }
-      }, 100);
+      // Check if items are already visible
+      const hasVisibleItems = timelineRef.current.dom?.root?.querySelector('.vis-item');
+      console.log('Timeline state:', {
+        hasVisibleItems: !!hasVisibleItems,
+        timelineExists: !!timelineRef.current
+      });
+      
+      if (!hasVisibleItems) {
+        console.log('No visible items, forcing redraw');
+        setTimeout(() => {
+          if (timelineRef.current) {
+            timelineRef.current.redraw();
+          }
+        }, 100);
+      } else {
+        console.log('Items already visible, skipping redraw');
+      }
     }
   }, [shifts]);
 
@@ -405,6 +434,14 @@ export default function ShiftScheduler() {
                 return null;
               }
               
+              // Determine the shift class based on status and ownership
+              let shiftClass = 'shift-item';
+              if (shift.status === SHIFT_STATUS.AVAILABLE) {
+                shiftClass += ' available-shift';
+              } else if (shift.userId === user?.uid) {
+                shiftClass += ' my-shift';
+              }
+              
               const formattedShift = {
                 ...shift,
                 id: shift.id,
@@ -412,7 +449,7 @@ export default function ShiftScheduler() {
                 content: `${shift.name} | ${shift.startTimeFormatted}-${shift.endTimeFormatted}`,
                 start: startDate.toISOString(),
                 end: endDate.toISOString(),
-                className: shift.status === SHIFT_STATUS.AVAILABLE ? 'shift-item available-shift' : 'shift-item',
+                className: shiftClass,
                 date: shift.date || currentDateISO,
               };
               
@@ -459,20 +496,22 @@ export default function ShiftScheduler() {
     };
     
     loadShifts();
-  }, [fetchShiftsFromFirebase, roles, currentDate, formatDate]);
+  }, [fetchShiftsFromFirebase, roles, currentDate, formatDate, user?.uid]);
 
   // Force timeline reinitialization when data is ready
   useEffect(() => {
     if (timelineRef.current) {
-      console.log('Timeline reinitialization effect triggered', {
-        shifts: shifts.length,
-        roles: roles.length,
-        currentDate: currentDate
+      console.log('=== Timeline Reinitialization Effect ===');
+      console.log('Triggered by changes in:', {
+        shiftsLength: shifts.length,
+        rolesLength: roles.length,
+        currentDate: currentDate.toISOString(),
+        timelineExists: !!timelineRef.current
       });
       
       const initializeTimeline = () => {
         if (timelineRef.current && timelineRef.current.dom && timelineRef.current.dom.root) {
-          console.log('Forcing timeline redraw');
+          console.log('Timeline DOM ready, initializing...');
           const container = timelineRef.current.dom.root;
           const height = container.clientHeight;
           const width = container.clientWidth;
@@ -481,9 +520,14 @@ export default function ShiftScheduler() {
           container.style.height = `${height}px`;
           container.style.width = `${width}px`;
           
-          // Set options and redraw
-          timelineRef.current.setOptions(options);
-          timelineRef.current.redraw();
+          // Only redraw if necessary
+          const needsRedraw = !timelineRef.current.dom.root.querySelector('.vis-item');
+          if (needsRedraw) {
+            console.log('Timeline needs redraw - no items found');
+            timelineRef.current.redraw();
+          } else {
+            console.log('Timeline already has items, skipping redraw');
+          }
         } else {
           console.log('Timeline DOM not ready, retrying in 100ms');
           setTimeout(initializeTimeline, 100);
@@ -492,24 +536,26 @@ export default function ShiftScheduler() {
       
       initializeTimeline();
     }
-  }, [shifts, roles, currentDate, options]);
+  }, [shifts, roles, currentDate]);
 
   // Update options when currentDate changes
   useEffect(() => {
+    console.log('=== Options Update Effect ===');
+    console.log('Current date changed to:', currentDate.toISOString());
+    
     const now = new Date();
     const currentHour = now.getHours();
     
     // Calculate the start and end times for the 8-hour window
-    let startHour = currentHour - 4; // Center on current time
+    let startHour = currentHour - 4;
     let endHour = currentHour + 4;
     
-    // Handle edge cases
-    if (startHour < 5) { // If start would be before 5am
+    if (startHour < 5) {
       startHour = 5;
-      endHour = 13; // Show 5am-1pm
-    } else if (endHour > 24) { // If end would be after midnight
+      endHour = 13;
+    } else if (endHour > 24) {
       endHour = 24;
-      startHour = 16; // Show 4pm-midnight
+      startHour = 16;
     }
     
     const newOptions = {
@@ -517,15 +563,37 @@ export default function ShiftScheduler() {
       min: new Date(new Date(currentDate).setHours(5, 0, 0, 0)),
       max: new Date(new Date(currentDate).setHours(24, 0, 0, 0)),
       start: new Date(new Date(currentDate).setHours(startHour, 0, 0, 0)),
-      end: new Date(new Date(currentDate).setHours(endHour, 0, 0, 0))
+      end: new Date(new Date(currentDate).setHours(endHour, 0, 0, 0)),
+      editable: {
+        add: false,
+        updateTime: false,
+        updateGroup: false,
+        remove: false
+      },
+      moveable: true,
+      zoomable: true,
+      selectable: true,
+      horizontalScroll: false,
+      verticalScroll: false,
+      orientation: {
+        axis: 'top',
+        item: 'top'
+      }
     };
     
-    console.log('Updating timeline options:', newOptions);
-    setOptions(newOptions);
+    // Deep compare options
+    const optionsChanged = JSON.stringify(options) !== JSON.stringify(newOptions);
+    console.log('Options comparison:', {
+      optionsChanged,
+      currentOptionsLength: Object.keys(options).length,
+      newOptionsLength: Object.keys(newOptions).length
+    });
     
-    if (timelineRef.current) {
-      timelineRef.current.setOptions(newOptions);
-      timelineRef.current.redraw();
+    if (optionsChanged) {
+      console.log('Options changed, updating timeline');
+      setOptions(newOptions);
+    } else {
+      console.log('Options unchanged, skipping update');
     }
   }, [currentDate]);
 
@@ -642,6 +710,34 @@ export default function ShiftScheduler() {
     }));
   };
 
+  // Update local state after shift changes
+  const updateLocalShiftState = useCallback((updatedShift) => {
+    console.log('=== Updating Local Shift State ===');
+    console.log('Updated shift:', updatedShift);
+    
+    setShifts(prevShifts => {
+      const newShifts = prevShifts.map(shift => 
+        shift.id === updatedShift.id ? updatedShift : shift
+      );
+      console.log('Shifts state updated:', {
+        prevLength: prevShifts.length,
+        newLength: newShifts.length
+      });
+      return newShifts;
+    });
+    
+    if (itemsDatasetRef.current) {
+      console.log('Updating timeline item directly');
+      itemsDatasetRef.current.update({
+        id: updatedShift.id,
+        content: updatedShift.content,
+        className: updatedShift.className
+      });
+    } else {
+      console.warn('Timeline dataset ref not available');
+    }
+  }, []);
+
   // Function to update a shift from edit dialog data
   const updateShiftFromDialog = async () => {
     try {
@@ -717,21 +813,13 @@ export default function ShiftScheduler() {
         throw error;
       }
       
-      // Update local state
-      setShifts(prevShifts => 
-        prevShifts.map(shift => 
-          shift.id === shiftId 
-            ? {
-                ...shift,
-                ...shiftDataForFirebase,
-                start: startTime.toISOString(),
-                end: endTime.toISOString(),
-                vehicleId: editShiftData.vehicleId || null,
-                vehicleName: editShiftData.vehicleName || null
-              }
-            : shift
-        )
-      );
+      // Update local state using the new function
+      updateLocalShiftState({
+        ...shiftDataForFirebase,
+        start: startTime.toISOString(),
+        end: endTime.toISOString(),
+        className: 'shift-item my-shift'
+      });
       
       console.log(`[updateShiftFromDialog] Local state updated`);
       setEditDialogOpen(false);
@@ -832,7 +920,7 @@ export default function ShiftScheduler() {
     }
   };
 
-  // Function to handle shift pickups
+  // Function to handle shift clicks
   const handleShiftClick = useCallback((event) => {
     console.log('Shift clicked:', event);
     
@@ -846,13 +934,34 @@ export default function ShiftScheduler() {
       return;
     }
     
+    // Check if this is the user's shift
+    if (clickedShift.userId === user?.uid) {
+      // Set the shift data for editing
+      setEditShiftData({
+        id: clickedShift.id,
+        name: clickedShift.name,
+        startTime: new Date(clickedShift.startTimeISO),
+        endTime: new Date(clickedShift.endTimeISO),
+        role: clickedShift.role,
+        roleName: clickedShift.roleName,
+        formattedStartTime: clickedShift.startTimeFormatted,
+        formattedEndTime: clickedShift.endTimeFormatted,
+        status: clickedShift.status,
+        date: clickedShift.date,
+        vehicleId: clickedShift.vehicleId,
+        vehicleName: clickedShift.vehicleName,
+      });
+      setEditDialogOpen(true);
+      return;
+    }
+    
     // Only allow picking up available shifts
     if (clickedShift.status !== SHIFT_STATUS.AVAILABLE) {
       console.log('Shift is not available for pickup');
       return;
     }
     
-    // Set the shift data for the pickup dialog
+    // Set the shift data for pickup
     setPickupShiftData({
       id: clickedShift.id,
       name: clickedShift.name,
@@ -870,7 +979,7 @@ export default function ShiftScheduler() {
     
     // Open the pickup dialog
     setPickupDialogOpen(true);
-  }, [shifts]);
+  }, [shifts, user?.uid]);
 
   // Function to handle shift pickup confirmation
   const handlePickupConfirm = async () => {
@@ -927,12 +1036,8 @@ export default function ShiftScheduler() {
         return;
       }
 
-      // Update local state
-      setShifts(prevShifts => 
-        prevShifts.map(shift => 
-          shift.id === pickupShiftData.id ? updatedShift : shift
-        )
-      );
+      // Update local state using the new function
+      updateLocalShiftState(updatedShift);
 
       // Close the dialog and reset errors
       setPickupDialogOpen(false);
@@ -940,6 +1045,72 @@ export default function ShiftScheduler() {
     } catch (error) {
       console.error('Failed to pick up shift:', error);
       alert('Failed to pick up shift. Please try again.');
+    }
+  };
+
+  // Function to handle shift edit confirmation
+  const handleEditConfirm = async () => {
+    try {
+      if (!user) {
+        console.error('No current user found');
+        alert('Please sign in to edit shifts');
+        return;
+      }
+
+      // Check if a vehicle is assigned
+      if (!editShiftData.vehicleId) {
+        setVehicleError('You must assign a vehicle!');
+        return;
+      }
+
+      // Format the shift data for both Firebase and the timeline
+      const updatedShift = {
+        ...editShiftData,
+        // Timeline required properties
+        id: editShiftData.id,
+        group: editShiftData.role,
+        start: editShiftData.startTime.toISOString(),
+        end: editShiftData.endTime.toISOString(),
+        content: `${editShiftData.name} | ${editShiftData.formattedStartTime}-${editShiftData.formattedEndTime}`,
+        className: 'shift-item my-shift',
+        
+        // Firebase properties
+        status: SHIFT_STATUS.ASSIGNED,
+        userId: user.uid,
+        startTimeISO: editShiftData.startTime.toISOString(),
+        endTimeISO: editShiftData.endTime.toISOString(),
+        startTimeFormatted: editShiftData.formattedStartTime,
+        endTimeFormatted: editShiftData.formattedEndTime,
+        role: editShiftData.role,
+        roleName: editShiftData.roleName,
+        date: editShiftData.date,
+        vehicleId: editShiftData.vehicleId || null,
+        vehicleName: editShiftData.vehicleName || null
+      };
+
+      console.log('Updating shift with data:', updatedShift);
+
+      // Update in Firebase
+      const result = await updateShiftInFirebase(updatedShift);
+
+      if (!result) {
+        // Conflict or error already handled inside updateShiftInFirebase
+        return;
+      }
+
+      // Update local state
+      setShifts(prevShifts => 
+        prevShifts.map(shift => 
+          shift.id === editShiftData.id ? updatedShift : shift
+        )
+      );
+
+      // Close the dialog and reset errors
+      setEditDialogOpen(false);
+      setVehicleError('');
+    } catch (error) {
+      console.error('Failed to update shift:', error);
+      alert('Failed to update shift. Please try again.');
     }
   };
 
@@ -977,7 +1148,7 @@ export default function ShiftScheduler() {
   }, [handleShiftClick]);
 
   return (
-    <div className="container mx-auto p-4">
+    <div className="container mx-auto px-4">
       <div className="flex items-center gap-2 mb-2">
         <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setCurrentDate(prev => new Date(prev.getTime() - 86400000))}>
           <ChevronLeft className="h-6 w-6" />
@@ -1116,45 +1287,48 @@ export default function ShiftScheduler() {
           <DialogHeader>
             <DialogTitle>Edit Shift</DialogTitle>
             <DialogDescription>
-              {(() => {
-                console.log('🎯 Edit dialog shift data:', editShiftData);
-                if (!editShiftData.id) {
-                  console.log('❌ No valid shift data yet');
-                  return 'Loading shift details...';
-                }
-                return editShiftData.roleName && editShiftData.startTime && editShiftData.endTime
-                  ? `Update shift details for ${getRoleDisplayName(editShiftData)} at ${formatTimeForTitle(editShiftData.startTime)} to ${formatTimeForTitle(editShiftData.endTime)}`
-                  : 'Update shift details';
-              })()}
+              {editShiftData.roleName && editShiftData.startTime && editShiftData.endTime
+                ? `Edit shift details for ${editShiftData.roleName} from ${formatTimeForTitle(editShiftData.startTime)} to ${formatTimeForTitle(editShiftData.endTime)}`
+                : 'Edit shift details'}
             </DialogDescription>
           </DialogHeader>
           
           {editShiftData.id ? (
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="editStartTime" className="text-right">
-                  Start Time
-                </Label>
-                <Input
-                  id="editStartTime"
-                  type="time" 
-                  value={editShiftData.formattedStartTime}
-                  onChange={handleEditStartTimeChange}
-                  className="col-span-3"
-                />
+                <Label className="text-right">Role</Label>
+                <div className="col-span-3">{editShiftData.roleName}</div>
               </div>
               
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="editEndTime" className="text-right">
-                  End Time
+                <Label className="text-right">Time</Label>
+                <div className="col-span-3">
+                  {editShiftData.formattedStartTime} - {editShiftData.formattedEndTime}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="vehicle" className="text-right">
+                  Assign Vehicle
                 </Label>
-                <Input
-                  id="editEndTime"
-                  type="time" 
-                  value={editShiftData.formattedEndTime}
-                  onChange={handleEditEndTimeChange}
-                  className="col-span-3"
-                />
+                <div className="col-span-3">
+                  <select 
+                    id="vehicle"
+                    value={editShiftData.vehicleId || ''} 
+                    onChange={handleVehicleSelect}
+                    className="w-full p-2 border rounded"
+                  >
+                    <option value="">Select Vehicle</option>
+                    {vehicles
+                      .filter(vehicle => vehicle.status === 'Available' || vehicle.status === 'In Use')
+                      .map(vehicle => (
+                        <option key={vehicle.id} value={vehicle.id}>
+                          {vehicle.name}
+                        </option>
+                    ))}
+                  </select>
+                  {vehicleError && <div className="text-red-500 text-sm mt-1">{vehicleError}</div>}
+                </div>
               </div>
             </div>
           ) : (
@@ -1162,10 +1336,13 @@ export default function ShiftScheduler() {
           )}
           
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+            <Button variant="outline" onClick={() => {
+              setEditDialogOpen(false);
+              setVehicleError('');
+            }}>
               Cancel
             </Button>
-            <Button onClick={updateShiftFromDialog}>Save Changes</Button>
+            <Button onClick={handleEditConfirm}>Save Changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1188,6 +1365,11 @@ export default function ShiftScheduler() {
         .available-shift {
           background-color: #15803d; /* Green background */
           border-color: #166534; /* Darker green border */
+          color: white;
+        }
+        .my-shift {
+          background-color: #2563eb; /* Blue background */
+          border-color: #1d4ed8; /* Darker blue border */
           color: white;
         }
         .vis-item.vis-selected {
