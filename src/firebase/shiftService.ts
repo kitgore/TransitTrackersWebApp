@@ -127,7 +127,7 @@ export const fetchShiftsByDate = async (date: string): Promise<Shift[]> => {
 
 export const createShift = async (
   shiftData: Omit<Shift, 'id' | 'createdAt' | 'updatedAt'>
-): Promise<Shift> => {
+): Promise<{ success: true; shift: Shift } | { success: false; message: string }> => {
   try {
     const {
       date,
@@ -138,20 +138,22 @@ export const createShift = async (
     } = shiftData;
 
     if (!date) {
-      throw new Error('Shift data must include a date');
+      return { success: false, message: 'Shift data must include a date' };
     }
 
-    // Call the conflict checker
-    const hasConflict = await checkShiftConflict({
+    const conflictingShifts = await checkShiftConflict({
       date,
       startTime: startTimeFormatted,
       endTime: endTimeFormatted,
       driverId: driverId ?? undefined,
       vehicleId: vehicleId ?? undefined,
-    });    
+    });
 
-    if (hasConflict) {
-      throw new Error('Shift conflict detected: another shift overlaps with the same driver or vehicle.');
+    if (conflictingShifts) {
+      return {
+        success: false,
+        message: 'The driver or vehicle you selected conflicts with an existing shift. Shift not created.'
+      };
     }
 
     const dataWithTimestamp: FirestoreShift = {
@@ -163,7 +165,7 @@ export const createShift = async (
     const shiftsCollection = getShiftsCollection(date);
     const docRef = await addDoc(shiftsCollection, dataWithTimestamp);
 
-    return {
+    const shift: Shift = {
       ...shiftData,
       id: docRef.id,
       firestoreId: docRef.id,
@@ -171,51 +173,88 @@ export const createShift = async (
       createdAt: new Date(),
       updatedAt: new Date()
     };
+
+    return { success: true, shift };
   } catch (error) {
     console.error('Error creating shift:', error);
-    throw error;
+    return {
+      success: false,
+      message: 'An unexpected error occurred while creating the shift.'
+    };
   }
 };
 
-
 // Update an existing shift
-export const updateShift = async (date: string, id: string, shiftData: Partial<Shift>): Promise<Shift> => {
+export const updateShift = async (
+  date: string,
+  id: string,
+  shiftData: Partial<Shift>
+): Promise<
+  { success: true; shift: Shift } | { success: false; message: string }
+> => {
   try {
-    // Make sure id is a string
     const idString = String(id);
-   
+
+    // Prepare fields needed for conflict checking
+    const { startTimeFormatted, endTimeFormatted, userId, vehicleId } = shiftData;
+
+    if (!startTimeFormatted || !endTimeFormatted) {
+      return { success: false, message: "Start and end times are required for conflict checking." };
+    }
+
+    // Check for conflicts
+    const conflicts = await checkShiftConflict({
+      date,
+      startTime: startTimeFormatted,
+      endTime: endTimeFormatted,
+      driverId: userId ?? undefined,
+      vehicleId: vehicleId ?? undefined,
+      id: idString, // <-- include the shift being updated so it's excluded from conflict check
+    });
+
+    if (conflicts) {
+      return {
+        success: false,
+        message:
+          "The driver or vehicle you selected conflicts with an existing shift. Shift not updated.",
+      };
+    }
+
     const shiftsCollection = getShiftsCollection(date);
     const shiftRef = doc(shiftsCollection, idString);
-   
-    // Create a clean object with only the fields we want to update
+
     const updateData: Record<string, any> = {
       ...shiftData,
       updatedAt: serverTimestamp(),
       id: idString,
       date: date,
     };
-    
-    // Remove any fields that shouldn't be updated
-    delete updateData.createdAt; // Don't update creation time
-    delete updateData.firestoreId; // Don't update firestoreId
-   
-    // Ensure roleName is preserved if it exists in shiftData
+
+    delete updateData.createdAt;
+    delete updateData.firestoreId;
+
     if (shiftData.roleName) {
       updateData.roleName = shiftData.roleName;
     }
-   
+
     await updateDoc(shiftRef, updateData);
-   
+
     return {
-      ...shiftData,
-      id: idString,
-      firestoreId: idString,
-      date: date,
-      updatedAt: new Date()
-    } as Shift;
+      success: true,
+      shift: {
+        ...shiftData,
+        id: idString,
+        firestoreId: idString,
+        date,
+        updatedAt: new Date(),
+      } as Shift,
+    };
   } catch (error) {
     console.error(`Error updating shift ${id}:`, error);
-    throw error;
+    return {
+      success: false,
+      message: "An unexpected error occurred while updating the shift.",
+    };
   }
 };
 
