@@ -30,10 +30,12 @@ import {
 } from '@/src/firebase/shiftService';
 import { useBaseSchedule, SHIFT_STATUS, DATE_FORMATS } from './base-schedule';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from "@/hooks/use-toast";
 
 export default function ShiftScheduler() {
   // Get current user from AuthContext
   const { user } = useAuth();
+  const { toast } = useToast();
   
   // Get base functionality from useBaseSchedule hook
   const {
@@ -138,33 +140,54 @@ export default function ShiftScheduler() {
 
   // Update shift in Firebase
   const updateShiftInFirebase = useCallback(async (shift) => {
+    const originalShift = shift; // Save the original in case you want to revert local state
+  
     try {
-      // Extract the required data
-      const date = shift.date;
-      const id = shift.id;
-      
+      const { date, id } = shift;
+  
       if (!date) {
         throw new Error("Missing date in shift data");
       }
-      
+  
       if (!id) {
         throw new Error("Missing ID in shift data");
       }
-      
+  
       console.log(`Updating shift with path: schedules/${date}/shifts/${id}`);
-      
-      // Remove properties that could cause issues with Firestore
+  
+      // Remove properties that shouldn't go to Firestore (if needed)
       const shiftDataForFirebase = { ...shift };
-      
-      // Pass the date and the ID
-      const updatedShift = await updateFirebaseShift(date, id, shiftDataForFirebase);
-      return updatedShift;
+  
+      const result = await updateFirebaseShift(date, id, shiftDataForFirebase);
+  
+      if (!result.success) {
+        // Optionally revert local UI if you are using optimistic updates
+  
+        // Show error toast
+        toast({
+          title: "Shift Conflict",
+          description: result.message,
+          variant: "destructive",
+        });
+  
+        return null;
+      }
+  
+      return result.shift;
+  
     } catch (error) {
       console.error("Failed to update shift:", error);
-      throw error;
+  
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred while updating the shift.",
+        variant: "destructive",
+      });
+  
+      return null;
     }
   }, []);
-
+  
   // Load users from Firebase
   useEffect(() => {
     const loadUsers = async () => {
@@ -897,7 +920,12 @@ export default function ShiftScheduler() {
       console.log('Updating shift with data:', updatedShift);
 
       // Update in Firebase
-      await updateShiftInFirebase(updatedShift);
+      const result = await updateShiftInFirebase(updatedShift);
+
+      if (!result) {
+        // Conflict or error already handled inside updateShiftInFirebase
+        return;
+      }
 
       // Update local state
       setShifts(prevShifts => 
