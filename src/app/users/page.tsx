@@ -51,11 +51,11 @@ export default function UsersPage() {
   }
 
   return (
-    <AppSidebar breadcrumb="Manage Drivers">
+    <AppSidebar>
       <div className="h-full flex-1 flex-col space-y-8 p-8 md:flex">
         <div className="flex items-center justify-between space-y-2">
           <div>
-            <h2 className="text-2xl font-bold tracking-tight">Drivers</h2>
+            <h2 className="text-2xl font-bold tracking-tight">Manage Drivers</h2>
           </div>
           <div className="flex items-center space-x-2">
             <Button onClick={() => router.push('/add-user')}>
