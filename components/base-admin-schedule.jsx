@@ -833,10 +833,10 @@ export default function BaseAdminSchedule({
                 >
                   <option value="">Select Vehicle</option>
                   {vehicles
-                    .filter(vehicle => vehicle.status === 'Available')
+                    .filter(vehicle => vehicle.status === 'Available' || vehicle.status === 'In Use')
                     .map(vehicle => (
                       <option key={vehicle.id} value={vehicle.id}>
-                        {vehicle.name}
+                        {vehicle.name} {vehicle.adaAccessible ? '(ADA)' : ''}
                       </option>
                   ))}
                 </select>
@@ -948,11 +948,11 @@ export default function BaseAdminSchedule({
                   >
                     <option value="">Select Vehicle</option>
                     {vehicles
-                      .filter(vehicle => vehicle.status === 'Available')
+                      .filter(vehicle => vehicle.status === 'Available' || vehicle.status === 'In Use')
                       .map(vehicle => (
                         <option key={vehicle.id} value={vehicle.id}>
-                          {vehicle.name}
-                        </option>
+                        {vehicle.name} {vehicle.adaAccessible ? '(ADA)' : ''}
+                      </option>
                     ))}
                   </select>
                 </div>
