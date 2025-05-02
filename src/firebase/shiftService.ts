@@ -22,7 +22,9 @@ import {
   //getVehicleAvailability,
   Vehicle
 } from './vehicleService';
-import { getAuth } from 'firebase/auth';
+
+import { checkShiftConflict } from './conflictService';
+
 // Type definitions
 interface Shift {
   id?: string;
@@ -123,35 +125,49 @@ export const fetchShiftsByDate = async (date: string): Promise<Shift[]> => {
   }
 };
 
-// Create a new shift for a specific date
-export const createShift = async (shiftData: Omit<Shift, 'id' | 'createdAt' | 'updatedAt'>): Promise<Shift> => {
+export const createShift = async (
+  shiftData: Omit<Shift, 'id' | 'createdAt' | 'updatedAt'>
+): Promise<Shift> => {
   try {
-    // Get the date from the shift data
-    const { date } = shiftData;
-   
+    const {
+      date,
+      startTimeFormatted,
+      endTimeFormatted,
+      userId: driverId,
+      vehicleId
+    } = shiftData;
+
     if (!date) {
       throw new Error('Shift data must include a date');
     }
-   
-    // Add timestamp
+
+    // Call the conflict checker
+    const hasConflict = await checkShiftConflict({
+      date,
+      startTime: startTimeFormatted,
+      endTime: endTimeFormatted,
+      driverId: driverId ?? undefined,
+      vehicleId: vehicleId ?? undefined,
+    });    
+
+    if (hasConflict) {
+      throw new Error('Shift conflict detected: another shift overlaps with the same driver or vehicle.');
+    }
+
     const dataWithTimestamp: FirestoreShift = {
       ...shiftData,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };
-   
-    // Get the shifts collection for this date
+
     const shiftsCollection = getShiftsCollection(date);
-   
-    // Add the document to the shifts subcollection
     const docRef = await addDoc(shiftsCollection, dataWithTimestamp);
-    
-    // Return the shift data with the Firebase-generated ID
+
     return {
       ...shiftData,
       id: docRef.id,
       firestoreId: docRef.id,
-      date: date,
+      date,
       createdAt: new Date(),
       updatedAt: new Date()
     };
