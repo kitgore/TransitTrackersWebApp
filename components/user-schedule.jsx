@@ -517,7 +517,22 @@ export default function ShiftScheduler() {
       min: new Date(new Date(currentDate).setHours(5, 0, 0, 0)),
       max: new Date(new Date(currentDate).setHours(24, 0, 0, 0)),
       start: new Date(new Date(currentDate).setHours(startHour, 0, 0, 0)),
-      end: new Date(new Date(currentDate).setHours(endHour, 0, 0, 0))
+      end: new Date(new Date(currentDate).setHours(endHour, 0, 0, 0)),
+      editable: {
+        add: false,
+        updateTime: false,
+        updateGroup: false,
+        remove: false
+      },
+      moveable: true, // Allow timeline navigation through dragging
+      zoomable: true, // Allow zooming with mousewheel
+      selectable: true, // Keep selection enabled for clicking
+      horizontalScroll: false, // Disable horizontal scrolling
+      verticalScroll: false, // Disable vertical scrolling
+      orientation: {
+        axis: 'top',
+        item: 'top'
+      }
     };
     
     console.log('Updating timeline options:', newOptions);
@@ -977,7 +992,7 @@ export default function ShiftScheduler() {
   }, [handleShiftClick]);
 
   return (
-    <div className="container mx-auto p-4">
+    <div className="container mx-auto px-4">
       <div className="flex items-center gap-2 mb-2">
         <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setCurrentDate(prev => new Date(prev.getTime() - 86400000))}>
           <ChevronLeft className="h-6 w-6" />
