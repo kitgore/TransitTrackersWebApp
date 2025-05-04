@@ -6,7 +6,7 @@ import { auth } from '@/src/firebase/config';
 import { getUserProfile, updateUserProfile } from '@/src/firebase/userService';
 import { AppSidebar } from '@/components/app-sidebar';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { storage } from '@/src/firebase/config';
+//import { storage } from '@/src/firebase/config';
 import { Button } from "@/components/ui/button";
 
 export default function AccountPage() {
@@ -45,7 +45,7 @@ export default function AccountPage() {
     await updateUserProfile(user.uid, { [field]: value });
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  /*const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!user || !e.target.files?.length) return;
 
     const file = e.target.files[0];
@@ -62,7 +62,7 @@ export default function AccountPage() {
     } finally {
       setUploading(false);
     }
-  };
+  };*/
 
 
   return (
@@ -71,7 +71,7 @@ export default function AccountPage() {
     <h1 className="text-2xl font-bold mb-4">Account Settings</h1>
     {profile ? (
       <>
-        <div className="mb-4">
+        {/*<div className="mb-4">
           <label className="block font-medium mb-1">Upload Profile Picture</label>
           <input type="file" accept="image/*" onChange={handleImageUpload} />
           {uploading && <p className="text-sm text-gray-500">Uploading...</p>}
@@ -82,7 +82,7 @@ export default function AccountPage() {
               className="mt-2 w-20 h-20 rounded-full border object-cover"
             />
           )}
-        </div>
+        </div>*/}
 
         <ul className="space-y-4">
           {['firstName', 'lastName', 'email', 'phoneNumber'].map((field) => (

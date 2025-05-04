@@ -868,22 +868,6 @@ export default function BaseAdminSchedule({
                 className="col-span-3"
               />
             </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right">Repeat Days</Label>
-              <div className="col-span-3 flex flex-wrap gap-2">
-                {ORDERED_DAYS.map(day => (
-                  <Button
-                    key={day}
-                    variant={newShiftData.repeatDays[day] ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => toggleRepeatDay(day)}
-                  >
-                    {day}
-                  </Button>
-                ))}
-              </div>
-            </div>
           </div>
           
           <DialogFooter>
@@ -984,21 +968,6 @@ export default function BaseAdminSchedule({
                 />
               </div>
 
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right">Repeat Days</Label>
-                <div className="col-span-3 flex flex-wrap gap-2">
-                  {ORDERED_DAYS.map(day => (
-                    <Button
-                      key={day}
-                      variant={editShiftData.repeatDays[day] ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => toggleRepeatDay(day, true)}
-                    >
-                      {day}
-                    </Button>
-                  ))}
-                </div>
-              </div>
             </div>
           ) : (
             <div className="py-4 text-center">Loading shift details...</div>

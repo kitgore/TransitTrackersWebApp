@@ -209,7 +209,7 @@ export default function AdminPage() {
                     <div className="w-1/2 rounded-md border">
                         <div className="flex bg-gray-100 font-bold p-3 px-12 border-b">Vehicle Details & Status</div>
 
-                        <ScrollArea className="h-[500px] w-full">
+                        <ScrollArea className="h-[600px] w-full">
                             <div className="space-y-0">
                                 {vehicles.map((vehicle) => (
                                     <div key={vehicle.id} className="flex items-center p-3 border-b last:border-b-0">
