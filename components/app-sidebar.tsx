@@ -46,7 +46,7 @@ const userOnlyNavigationItems = [
 ];
 
 const sharedNavigationItems = [
-  { name: 'User Settings', url: '/account', icon: Settings },
+  { name: 'Settings', url: '/account', icon: Settings },
 ];
 
 export function AppSidebar({ children }: SidebarProps) {
