@@ -315,44 +315,9 @@ export default function ShiftScheduler() {
     setVehicleError(''); // Clear error when vehicle is selected
   }, [vehicles, editShiftData, checkVehicleAvailability]);
 
-  // Force timeline redraw after shifts are loaded
-  useEffect(() => {
-    console.log('=== Shifts Loaded Effect ===');
-    console.log('Shifts length:', shifts.length);
-    
-    if (shifts.length > 0 && timelineRef.current) {
-      // Check if items are already visible
-      const hasVisibleItems = timelineRef.current.dom?.root?.querySelector('.vis-item');
-      console.log('Timeline state:', {
-        hasVisibleItems: !!hasVisibleItems,
-        timelineExists: !!timelineRef.current
-      });
-      
-      if (!hasVisibleItems) {
-        console.log('No visible items, forcing redraw');
-        setTimeout(() => {
-          if (timelineRef.current) {
-            timelineRef.current.redraw();
-          }
-        }, 100);
-      } else {
-        console.log('Items already visible, skipping redraw');
-      }
-    }
-  }, [shifts]);
-
   // Initialize shifts with consistent date format after component mounts
   useEffect(() => {
     console.log("USE EFFECT CALLED - Loading shifts");
-    console.log("Current state:", {
-      roles: roles.length,
-      currentDate: currentDate,
-      timelineRef: !!timelineRef.current,
-      itemsDatasetRef: !!itemsDatasetRef.current,
-      currentUser: !!user
-    });
-    
-    let lastFetchTime = 0;
     
     const loadShifts = async () => {
       // Wait until roles are loaded and not just the default role
@@ -361,27 +326,9 @@ export default function ShiftScheduler() {
         return;
       }
 
-      const now = Date.now();
-      if (now - lastFetchTime < 5000) {
-        return;
-      }
-      lastFetchTime = now;
-
-      // Check if we've already loaded shifts for this date
-      const currentDateISO = formatDate(currentDate, DATE_FORMATS.ISO);
-      if (lastLoadedDateRef.current === currentDateISO) {
-        return;
-      }
-      lastLoadedDateRef.current = currentDateISO;
-
       try {
+        const currentDateISO = formatDate(currentDate, DATE_FORMATS.ISO);
         console.log(`Fetching shifts for date: ${currentDateISO}`);
-        
-        // Clear existing shifts from both state and timeline dataset
-        setShifts([]);
-        if (itemsDatasetRef.current) {
-          itemsDatasetRef.current.clear();
-        }
         
         const firebaseShifts = await fetchShiftsFromFirebase();
         
@@ -390,31 +337,12 @@ export default function ShiftScheduler() {
           
           // Format the shifts for the timeline
           const formattedShifts = firebaseShifts.map(shift => {
-            console.log('Processing shift:', {
-              id: shift.id,
-              startTimeISO: shift.startTimeISO,
-              endTimeISO: shift.endTimeISO,
-              role: shift.role,
-              status: shift.status
-            });
-            
-            // Check if the role exists
-            const roleExists = roles.some(r => r.id === shift.role);
-            if (!roleExists) {
-              console.warn(`Shift ${shift.id} references invalid role ${shift.role}`);
-              return null;
-            }
-            
             try {
               // Convert Firestore Timestamp to Date if needed
               let startDate, endDate;
               
               if (shift.startTimeISO && typeof shift.startTimeISO === 'object' && 'seconds' in shift.startTimeISO) {
                 startDate = new Date(shift.startTimeISO.seconds * 1000);
-                console.log('Converted Firestore Timestamp to Date:', {
-                  original: shift.startTimeISO,
-                  converted: startDate
-                });
               } else {
                 startDate = new Date(shift.startTimeISO);
               }
@@ -453,7 +381,6 @@ export default function ShiftScheduler() {
                 date: shift.date || currentDateISO,
               };
               
-              console.log('Formatted shift:', formattedShift);
               return formattedShift;
             } catch (err) {
               console.error(`Error formatting shift ${shift.id}:`, err);
@@ -461,23 +388,13 @@ export default function ShiftScheduler() {
             }
           }).filter(shift => shift !== null);
           
-          console.log('Setting formatted shifts:', formattedShifts);
-          
           // Update the state first
           setShifts(formattedShifts);
           
           // Then update the timeline dataset if available
           if (itemsDatasetRef.current) {
-            console.log('Updating timeline dataset with new shifts');
-            // Clear the dataset first to ensure no old shifts remain
             itemsDatasetRef.current.clear();
-            // Add the new shifts
             itemsDatasetRef.current.add(formattedShifts);
-            
-            if (timelineRef.current) {
-              console.log('Forcing timeline redraw after dataset update');
-              timelineRef.current.redraw();
-            }
           }
         } else {
           console.log('No shifts found in Firebase');
@@ -496,47 +413,50 @@ export default function ShiftScheduler() {
     };
     
     loadShifts();
-  }, [fetchShiftsFromFirebase, roles, currentDate, formatDate, user?.uid]);
+  }, [currentDate, roles, user?.uid]);
 
-  // Force timeline reinitialization when data is ready
+  // Effect to handle timeline initialization and updates
   useEffect(() => {
-    if (timelineRef.current) {
-      console.log('=== Timeline Reinitialization Effect ===');
-      console.log('Triggered by changes in:', {
-        shiftsLength: shifts.length,
-        rolesLength: roles.length,
-        currentDate: currentDate.toISOString(),
-        timelineExists: !!timelineRef.current
-      });
-      
-      const initializeTimeline = () => {
-        if (timelineRef.current && timelineRef.current.dom && timelineRef.current.dom.root) {
-          console.log('Timeline DOM ready, initializing...');
-          const container = timelineRef.current.dom.root;
-          const height = container.clientHeight;
-          const width = container.clientWidth;
-          
-          // Force container resize
-          container.style.height = `${height}px`;
-          container.style.width = `${width}px`;
-          
-          // Only redraw if necessary
-          const needsRedraw = !timelineRef.current.dom.root.querySelector('.vis-item');
-          if (needsRedraw) {
-            console.log('Timeline needs redraw - no items found');
-            timelineRef.current.redraw();
-          } else {
-            console.log('Timeline already has items, skipping redraw');
-          }
-        } else {
-          console.log('Timeline DOM not ready, retrying in 100ms');
-          setTimeout(initializeTimeline, 100);
-        }
-      };
-      
+    if (!timelineRef.current || !itemsDatasetRef.current) return;
+
+    const initializeTimeline = () => {
+      if (timelineRef.current?.dom?.root) {
+        const container = timelineRef.current.dom.root;
+        const height = container.clientHeight || 600;
+        const width = container.clientWidth || 800;
+        
+        container.style.height = `${height}px`;
+        container.style.width = `${width}px`;
+        
+        // Force redraw
+        timelineRef.current.redraw();
+      }
+    };
+
+    // Initialize immediately
+    initializeTimeline();
+
+    // Set up a resize observer to handle container size changes
+    const resizeObserver = new ResizeObserver(() => {
       initializeTimeline();
+    });
+
+    if (timelineRef.current?.dom?.root) {
+      resizeObserver.observe(timelineRef.current.dom.root);
     }
-  }, [shifts, roles, currentDate]);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, []); // Empty dependency array - only run once on mount
+
+  // Effect to handle timeline updates when shifts change
+  useEffect(() => {
+    if (!timelineRef.current || !itemsDatasetRef.current) return;
+    
+    // Force redraw when shifts change
+    timelineRef.current.redraw();
+  }, [shifts.length]);
 
   // Update options when currentDate changes
   useEffect(() => {
